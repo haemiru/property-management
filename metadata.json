@@ -1,0 +1,8 @@
+{
+  "name": "중개노트 - 스마트 공인중개사 비서",
+  "description": "매물 사진 관리, 고객 응대, 일정 관리를 하나로 해결하는 공인중개사를 위한 스마트 업무 보조 도구입니다.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
