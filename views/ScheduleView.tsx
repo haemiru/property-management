@@ -3,6 +3,14 @@ import React, { useState } from 'react';
 import { ScheduleTask, Client, Property } from '../types';
 import { Icons } from '../constants';
 
+// Simple UUID generator
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 interface ScheduleViewProps {
   tasks: ScheduleTask[];
   clients: Client[];
@@ -45,7 +53,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formState.title || !formState.date) return;
-    
+
     if (editingTaskId) {
       const existingTask = tasks.find(t => t.id === editingTaskId);
       if (existingTask) {
@@ -60,7 +68,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
       }
     } else {
       onAdd({
-        id: Date.now().toString(),
+        id: generateUUID(),
         title: formState.title!,
         date: formState.date!,
         time: formState.time || '',
@@ -69,7 +77,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
         completed: false
       });
     }
-    
+
     setIsModalOpen(false);
   };
 
@@ -85,7 +93,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
     <div className="p-4">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold">일정 관리</h2>
-        <button 
+        <button
           onClick={handleOpenAddModal}
           className="bg-amber-500 text-white p-2 rounded-full shadow-lg"
         >
@@ -103,42 +111,42 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 uppercase">일정 내용</label>
-                <input 
-                  type="text" 
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" 
+                <input
+                  type="text"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                   placeholder="예: 미팅, 현장 방문 등"
                   value={formState.title || ''}
-                  onChange={e => setFormState({...formState, title: e.target.value})}
+                  onChange={e => setFormState({ ...formState, title: e.target.value })}
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500 uppercase">날짜</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                     value={formState.date}
-                    onChange={e => setFormState({...formState, date: e.target.value})}
+                    onChange={e => setFormState({ ...formState, date: e.target.value })}
                     required
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500 uppercase">시간</label>
-                  <input 
-                    type="time" 
+                  <input
+                    type="time"
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                     value={formState.time}
-                    onChange={e => setFormState({...formState, time: e.target.value})}
+                    onChange={e => setFormState({ ...formState, time: e.target.value })}
                   />
                 </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 uppercase">관련 고객 (선택)</label>
-                <select 
+                <select
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                   value={formState.clientId || ''}
-                  onChange={e => setFormState({...formState, clientId: e.target.value})}
+                  onChange={e => setFormState({ ...formState, clientId: e.target.value })}
                 >
                   <option value="">고객 선택 없음</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -155,17 +163,17 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
       <div className="space-y-4">
         {sortedTasks.length === 0 ? (
           <div className="text-center py-20 text-slate-400">
-             일정이 비어있습니다.
+            일정이 비어있습니다.
           </div>
         ) : (
           sortedTasks.map(task => {
             const client = clients.find(c => c.id === task.clientId);
             const taskDateTime = new Date(`${task.date}T${task.time || '00:00'}`);
             const isOverdue = !task.completed && taskDateTime < now;
-            
+
             return (
               <div key={task.id} className={`p-4 rounded-xl border border-slate-100 shadow-sm flex items-start space-x-3 transition-all ${task.completed ? 'bg-slate-50 opacity-60' : 'bg-white'} ${isOverdue ? 'border-red-100' : ''}`}>
-                <button 
+                <button
                   onClick={() => onToggle(task.id)}
                   className={`mt-1 h-5 w-5 rounded-md border flex-shrink-0 flex items-center justify-center transition-colors ${task.completed ? 'bg-indigo-600 border-indigo-600' : (isOverdue ? 'bg-white border-red-500' : 'bg-white border-slate-300')}`}
                 >
@@ -175,7 +183,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
                     </svg>
                   )}
                   {isOverdue && !task.completed && (
-                     <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
                   )}
                 </button>
                 <div className="flex-1">
@@ -193,14 +201,14 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ tasks, clients, properties,
                   )}
                 </div>
                 <div className="flex flex-col space-y-2">
-                  <button 
+                  <button
                     onClick={() => handleOpenEditModal(task)}
                     className="text-slate-300 hover:text-indigo-600 transition-colors p-1"
                     title="수정"
                   >
                     <Icons.Edit />
                   </button>
-                  <button 
+                  <button
                     onClick={() => onDelete(task.id)}
                     className="text-slate-300 hover:text-red-500 transition-colors p-1"
                     title="삭제"

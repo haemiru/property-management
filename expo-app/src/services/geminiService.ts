@@ -6,11 +6,12 @@ const API_KEY_STORAGE = 'gemini_api_key';
 
 export const geminiService = {
     async getApiKey(): Promise<string | null> {
-        return await AsyncStorage.getItem(API_KEY_STORAGE);
+        return 'AIzaSyBiyAQh6ZeF2JRTfvXWOsmzSQtZPT_VgCQ';
     },
 
     async setApiKey(key: string): Promise<void> {
-        await AsyncStorage.setItem(API_KEY_STORAGE, key);
+        // API Key is now hardcoded, this function is a no-op
+        console.warn('API Key is hardcoded, setApiKey has no effect.');
     },
 
     async generatePropertyDescription(

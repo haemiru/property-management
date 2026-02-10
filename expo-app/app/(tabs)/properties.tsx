@@ -21,7 +21,7 @@ import { captureRef } from 'react-native-view-shot';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Property, PropertyType, TransactionType, Client, LAND_USE_ZONES, LAND_CATEGORIES, BUILDING_USES, BrokerInfo, BuildingDetail } from '../../src/types';
-import { storage } from '../../src/storage';
+import { storage } from '../../src/storageService';
 import { Icons, Colors } from '../../src/constants';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { geminiService } from '../../src/services/geminiService';
@@ -197,7 +197,7 @@ export default function PropertiesScreen() {
     const [showTypeDropdown, setShowTypeDropdown] = useState(false);
     const [showTransactionDropdown, setShowTransactionDropdown] = useState(false);
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-    const [hasApiKey, setHasApiKey] = useState(false);
+
 
     // Advanced Search
     const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
@@ -239,6 +239,7 @@ export default function PropertiesScreen() {
         id: '',
         name: '',
         area: 0,
+        floor: undefined,
         totalFloorArea: 0,
         use: '',
         specificUse: '',
@@ -257,6 +258,7 @@ export default function PropertiesScreen() {
                         id: Date.now().toString(),
                         name: '주건물', // Default name
                         area: 0,
+                        floor: undefined,
                         totalFloorArea: 0,
                         use: '',
                         specificUse: '',
@@ -287,6 +289,7 @@ export default function PropertiesScreen() {
             id: '',
             name: '',
             area: 0,
+            floor: undefined,
             totalFloorArea: 0,
             use: '',
             specificUse: '',
@@ -417,16 +420,15 @@ export default function PropertiesScreen() {
     );
 
     const loadData = async () => {
-        const [props, clnts, apiKey, broker] = await Promise.all([
+        const [props, clnts, broker] = await Promise.all([
             storage.getProperties(),
             storage.getClients(),
-            geminiService.getApiKey(),
             storage.getBrokerInfo(),
         ]);
         setProperties(props);
         setClients(clnts);
-        setHasApiKey(!!apiKey);
         setBrokerInfo(broker);
+
     };
 
     const onRefresh = async () => {
@@ -568,18 +570,21 @@ export default function PropertiesScreen() {
             buildings: newProp.buildings,
         };
 
-        let newProperties;
         if (isUpdate) {
             newProperties = properties.map(p => p.id === id ? property : p);
             if (selectedProperty && selectedProperty.id === id) {
                 setSelectedProperty(property);
             }
+            // Use updateProperty instead of setProperties
+            await storage.updateProperty(property);
         } else {
             newProperties = [property, ...properties];
+            // Use addProperty
+            await storage.addProperty(property);
         }
 
         setProperties(newProperties);
-        await storage.setProperties(newProperties);
+        // await storage.setProperties(newProperties); // Removed
 
         setNewProp({
             type: PropertyType.HOUSE,
@@ -600,7 +605,8 @@ export default function PropertiesScreen() {
                 onPress: async () => {
                     const newProperties = properties.filter(p => p.id !== id);
                     setProperties(newProperties);
-                    await storage.setProperties(newProperties);
+                    // Use deleteProperty
+                    await storage.deleteProperty(id);
                     setSelectedProperty(null);
                 },
             },
@@ -1546,17 +1552,35 @@ export default function PropertiesScreen() {
                                                             )}
                                                         </View>
 
-                                                        <Text style={styles.label}>건물 명칭 (예: 가동)</Text>
-                                                        <TextInput
-                                                            style={styles.input}
-                                                            value={building.name}
-                                                            onChangeText={(text) => {
-                                                                const updated = newProp.buildings!.map(b => b.id === building.id ? { ...b, name: text } : b);
-                                                                setNewProp({ ...newProp, buildings: updated });
-                                                            }}
-                                                            placeholder="건물 명칭 입력"
-                                                            placeholderTextColor={Colors.slate400}
-                                                        />
+                                                        <Text style={styles.label}>건물 명칭 / 층수</Text>
+                                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                            <View style={{ flex: 2 }}>
+                                                                <TextInput
+                                                                    style={styles.input}
+                                                                    value={building.name}
+                                                                    onChangeText={(text) => {
+                                                                        const updated = newProp.buildings!.map(b => b.id === building.id ? { ...b, name: text } : b);
+                                                                        setNewProp({ ...newProp, buildings: updated });
+                                                                    }}
+                                                                    placeholder="예: 가동, 본관"
+                                                                    placeholderTextColor={Colors.slate400}
+                                                                />
+                                                            </View>
+                                                            <View style={{ flex: 1 }}>
+                                                                <TextInput
+                                                                    style={styles.input}
+                                                                    value={building.floor ? String(building.floor) : ''}
+                                                                    onChangeText={(text) => {
+                                                                        const val = parseInt(text) || undefined;
+                                                                        const updated = newProp.buildings!.map(b => b.id === building.id ? { ...b, floor: val } : b);
+                                                                        setNewProp({ ...newProp, buildings: updated });
+                                                                    }}
+                                                                    placeholder="층수"
+                                                                    keyboardType="numeric"
+                                                                    placeholderTextColor={Colors.slate400}
+                                                                />
+                                                            </View>
+                                                        </View>
 
                                                         <Text style={styles.label}>건평</Text>
                                                         <AreaInput
@@ -1913,17 +1937,17 @@ export default function PropertiesScreen() {
 
                                 <Text style={styles.label}>설명</Text>
                                 <TouchableOpacity
-                                    style={[styles.aiButton, !hasApiKey && styles.aiButtonDisabled]}
+                                    style={styles.aiButton}
                                     onPress={handleGenerateAI}
-                                    disabled={isGeneratingAI || !hasApiKey}
+                                    disabled={isGeneratingAI}
                                 >
                                     {isGeneratingAI ? (
                                         <ActivityIndicator size="small" color={Colors.white} />
                                     ) : (
                                         <>
-                                            <Icons.Search size={16} color={hasApiKey ? Colors.white : Colors.slate400} />
-                                            <Text style={[styles.aiButtonText, !hasApiKey && styles.aiButtonTextDisabled]}>
-                                                {hasApiKey ? 'AI 문구 생성' : 'API 키 필요'}
+                                            <Icons.Search size={16} color={Colors.white} />
+                                            <Text style={styles.aiButtonText}>
+                                                AI 문구 생성
                                             </Text>
                                         </>
                                     )}

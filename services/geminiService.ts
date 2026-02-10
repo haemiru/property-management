@@ -1,10 +1,10 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: "AIzaSyBiyAQh6ZeF2JRTfvXWOsmzSQtZPT_VgCQ" });
 
 export const generatePropertyDescription = async (
-  details: string, 
+  details: string,
   location?: { lat: number, lng: number }
 ): Promise<string> => {
   try {

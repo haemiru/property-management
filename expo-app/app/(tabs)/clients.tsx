@@ -13,9 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Client, ClientRole } from '../../src/types';
-import { storage } from '../../src/storage';
+import { storage } from '../../src/storageService';
 import { Icons, Colors } from '../../src/constants';
 import { useFocusEffect } from 'expo-router';
+import notifee, { EventType } from '@notifee/react-native';
+import { reloadCache } from '../../src/services/callDetection';
 
 export default function ClientsScreen() {
     const [clients, setClients] = useState<Client[]>([]);
@@ -24,29 +26,82 @@ export default function ClientsScreen() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterRole, setFilterRole] = useState<ClientRole | '전체'>('전체');
 
+    // Handle Notification Interaction
+    useEffect(() => {
+        const checkNotification = async () => {
+            // Check if opened from a notification (dead state)
+            const initialNotification = await notifee.getInitialNotification();
+            if (initialNotification && initialNotification.notification.data?.clientId) {
+                const clientId = initialNotification.notification.data.clientId as string;
+                handleOpenEditId(clientId);
+            }
+        };
+
+        checkNotification();
+
+        // Listen for foreground events (active state)
+        const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+            if (type === EventType.PRESS && detail.notification?.data?.clientId) {
+                const clientId = detail.notification.data.clientId as string;
+                handleOpenEditId(clientId);
+            }
+        });
+
+        return unsubscribe;
+    }, [clients]);
+
+    const handleOpenEditId = (clientId: string) => {
+        const client = clients.find(c => c.id === clientId);
+        if (client) {
+            handleOpenEdit(client);
+        } else {
+            console.log('Client not found in list for ID:', clientId);
+        }
+    };
+
     const [newClient, setNewClient] = useState<Partial<Client>>({
         role: ClientRole.LANDLORD,
     });
-
-    useFocusEffect(
-        useCallback(() => {
-            loadData();
-            return () => {
-                setIsAdding(false);
-                setNewClient({ role: ClientRole.LANDLORD });
-            };
-        }, [])
-    );
+    const [editingClient, setEditingClient] = useState<Client | null>(null);
 
     const loadData = async () => {
         const data = await storage.getClients();
         setClients(data);
     };
 
+    useFocusEffect(
+        useCallback(() => {
+            loadData();
+            return () => {
+                setIsAdding(false);
+                setEditingClient(null);
+                setNewClient({ role: ClientRole.LANDLORD });
+            };
+        }, [])
+    );
+
     const onRefresh = async () => {
         setRefreshing(true);
         await loadData();
         setRefreshing(false);
+    };
+
+    const handleOpenAdd = () => {
+        setEditingClient(null);
+        setNewClient({ role: ClientRole.LANDLORD, call_history: '' });
+        setIsAdding(true);
+    };
+
+    const handleOpenEdit = (client: Client) => {
+        setEditingClient(client);
+        setNewClient({
+            name: client.name,
+            phone: client.phone,
+            role: client.role,
+            notes: client.notes,
+            call_history: client.call_history
+        });
+        setIsAdding(true);
     };
 
     const handleSubmit = async () => {
@@ -55,20 +110,45 @@ export default function ClientsScreen() {
             return;
         }
 
-        const client: Client = {
-            id: Date.now().toString(),
-            name: newClient.name!,
-            phone: newClient.phone!,
-            role: newClient.role as ClientRole,
-            notes: newClient.notes || '',
-        };
+        try {
+            const clientData = {
+                name: newClient.name!,
+                phone: newClient.phone!,
+                role: newClient.role as ClientRole,
+                notes: newClient.notes || '',
+                call_history: newClient.call_history || '',
+            };
 
-        const newClients = [client, ...clients];
-        setClients(newClients);
-        await storage.setClients(newClients);
+            if (editingClient) {
+                await storage.updateClient({
+                    ...editingClient,
+                    ...clientData
+                });
 
-        setNewClient({ role: ClientRole.LANDLORD });
-        setIsAdding(false);
+                const updatedClients = clients.map(c =>
+                    c.id === editingClient.id ? { ...c, ...clientData } : c
+                );
+                setClients(updatedClients);
+                // Explicitly update cache to be 100% sure
+                await storage.updateLocalCache(updatedClients);
+            } else {
+                const savedClient = await storage.addClient(clientData);
+                const newClients = [savedClient, ...clients];
+                setClients(newClients);
+                // Explicitly update cache to be 100% sure
+                await storage.updateLocalCache(newClients);
+            }
+
+            // Sync cache with call listener (Log only now)
+            await reloadCache();
+
+            setNewClient({ role: ClientRole.LANDLORD });
+            setEditingClient(null);
+            setIsAdding(false);
+        } catch (error) {
+            console.error('Client save error:', error);
+            Alert.alert('오류', '고객 저장 중 오류가 발생했습니다.');
+        }
     };
 
     const handleDelete = async (id: string) => {
@@ -80,7 +160,8 @@ export default function ClientsScreen() {
                 onPress: async () => {
                     const newClients = clients.filter(c => c.id !== id);
                     setClients(newClients);
-                    await storage.setClients(newClients);
+                    await storage.deleteClient(id);
+                    await reloadCache();
                 },
             },
         ]);
@@ -169,7 +250,11 @@ export default function ClientsScreen() {
                     filteredClients.map(client => {
                         const badgeStyle = getRoleBadgeStyle(client.role);
                         return (
-                            <View key={client.id} style={styles.clientCard}>
+                            <TouchableOpacity
+                                key={client.id}
+                                style={styles.clientCard}
+                                onPress={() => handleOpenEdit(client)}
+                            >
                                 <View style={styles.clientIcon}>
                                     <Icons.Users size={20} color={Colors.emerald} />
                                 </View>
@@ -203,7 +288,7 @@ export default function ClientsScreen() {
                                         <Icons.Trash size={18} color={Colors.slate300} />
                                     </TouchableOpacity>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         );
                     })
                 )}
@@ -211,7 +296,7 @@ export default function ClientsScreen() {
             </ScrollView>
 
             {/* FAB */}
-            <TouchableOpacity style={styles.fab} onPress={() => setIsAdding(true)}>
+            <TouchableOpacity style={styles.fab} onPress={handleOpenAdd}>
                 <Icons.Plus size={24} color={Colors.white} />
             </TouchableOpacity>
 
@@ -220,7 +305,7 @@ export default function ClientsScreen() {
                 <SafeAreaView style={{ flex: 1, backgroundColor: Colors.white }}>
                     <View style={styles.modalContainer}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>고객 추가</Text>
+                            <Text style={styles.modalTitle}>{editingClient ? '고객 정보 수정' : '고객 추가'}</Text>
                             <TouchableOpacity onPress={() => setIsAdding(false)}>
                                 <Text style={styles.modalClose}>닫기</Text>
                             </TouchableOpacity>
@@ -273,8 +358,20 @@ export default function ClientsScreen() {
                                 placeholderTextColor={Colors.slate400}
                             />
 
+                            <Text style={styles.label}>통화 이력 <Text style={{ fontSize: 11, fontWeight: 'normal', color: '#94a3b8' }}>(최신 이력을 위에 적으세요)</Text></Text>
+                            <TextInput
+                                style={[styles.input, styles.textarea]}
+                                placeholder="통화 내용을 기록하세요"
+                                value={newClient.call_history || ''}
+                                onChangeText={text => setNewClient({ ...newClient, call_history: text })}
+                                multiline
+                                numberOfLines={5}
+                                textAlignVertical="top"
+                                placeholderTextColor={Colors.slate400}
+                            />
+
                             <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-                                <Text style={styles.submitButtonText}>고객 등록하기</Text>
+                                <Text style={styles.submitButtonText}>{editingClient ? '수정 완료' : '고객 등록하기'}</Text>
                             </TouchableOpacity>
 
                             <View style={{ height: 40 }} />

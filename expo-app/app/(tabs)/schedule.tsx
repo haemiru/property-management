@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ScheduleTask, Client } from '../../src/types';
-import { storage } from '../../src/storage';
+import { storage } from '../../src/storageService';
 import { Icons, Colors } from '../../src/constants';
 import { useFocusEffect } from 'expo-router';
 
@@ -114,6 +114,9 @@ export default function ScheduleScreen() {
                     }
                     : t
             );
+            // Find the updated task object
+            const updatedTask = newTasks.find(t => t.id === editingTaskId);
+            if (updatedTask) await storage.updateTask(updatedTask);
         } else {
             const newTask: ScheduleTask = {
                 id: Date.now().toString(),
@@ -124,10 +127,11 @@ export default function ScheduleScreen() {
                 completed: false,
             };
             newTasks = [newTask, ...tasks];
+            await storage.addTask(newTask);
         }
 
         setTasks(newTasks);
-        await storage.setTasks(newTasks);
+        // await storage.setTasks(newTasks);
         setIsModalOpen(false);
     };
 
@@ -136,7 +140,9 @@ export default function ScheduleScreen() {
             t.id === id ? { ...t, completed: !t.completed } : t
         );
         setTasks(newTasks);
-        await storage.setTasks(newTasks);
+
+        const updatedTask = newTasks.find(t => t.id === id);
+        if (updatedTask) await storage.updateTask(updatedTask);
     };
 
     const handleDelete = async (id: string) => {
@@ -148,7 +154,7 @@ export default function ScheduleScreen() {
                 onPress: async () => {
                     const newTasks = tasks.filter(t => t.id !== id);
                     setTasks(newTasks);
-                    await storage.setTasks(newTasks);
+                    await storage.deleteTask(id);
                 },
             },
         ]);

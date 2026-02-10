@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Property, Client, ScheduleTask } from '../types';
 import { Icons } from '../constants';
 
@@ -10,9 +10,14 @@ interface DashboardViewProps {
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({ properties, clients, tasks }) => {
+  const navigate = useNavigate();
   const pendingTasks = tasks.filter(t => !t.completed);
   const recentProperties = properties.slice(0, 3);
   const now = new Date();
+
+  const handlePropertyClick = (id: string) => {
+    navigate('/properties', { state: { selectedId: id } });
+  };
 
   return (
     <div className="p-4 space-y-6">
@@ -66,7 +71,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ properties, clients, task
         <div className="space-y-3">
           {recentProperties.length > 0 ? (
             recentProperties.map(prop => (
-              <div key={prop.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex gap-3">
+              <div
+                key={prop.id}
+                className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                onClick={() => handlePropertyClick(prop.id)}
+              >
                 <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
                   {prop.images[0] ? (
                     <img src={prop.images[0]} alt="" className="w-full h-full object-cover" />

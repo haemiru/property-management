@@ -57,6 +57,7 @@ export interface Property {
   images: string[];
   clientId?: string;
   createdAt: number;
+  updated_at?: string;
   // 공장/창고, 토지 공통
   landArea?: number;       // 대지면적 (m²)
   roadCondition?: string;  // 도로조건
@@ -94,6 +95,7 @@ export interface BuildingDetail {
   id: string;
   name: string;
   area: number; // 건평
+  floor?: number; // 층수
   totalFloorArea?: number; // 연면적 (평/m2 혼용 가능하지만 숫자로 관리)
   use?: string; // 건축물 용도
   specificUse?: string; // 세부 용도
@@ -108,6 +110,8 @@ export interface Client {
   phone: string;
   role: ClientRole;
   notes: string;
+  call_history?: string;
+  updated_at?: string;
 }
 
 export interface ScheduleTask {

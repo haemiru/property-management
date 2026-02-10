@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, Image } from 'react-native';
 import { Property, Client, ScheduleTask } from '../../src/types';
-import { storage } from '../../src/storage';
+import { storage } from '../../src/storageService';
 import { Icons, Colors } from '../../src/constants';
-import { geminiService } from '../../src/services/geminiService';
+
 import { useFocusEffect, router } from 'expo-router';
 
 export default function HomeScreen() {
@@ -13,13 +13,10 @@ export default function HomeScreen() {
 
     // Settings
     const [showSettings, setShowSettings] = useState(false);
-    const [apiKey, setApiKey] = useState('');
-    const [hasApiKey, setHasApiKey] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
             loadData();
-            checkApiKey();
         }, [])
     );
 
@@ -34,23 +31,6 @@ export default function HomeScreen() {
         setTasks(tsks);
     };
 
-    const checkApiKey = async () => {
-        const key = await geminiService.getApiKey();
-        setHasApiKey(!!key);
-        if (key) setApiKey(key);
-    };
-
-    const handleSaveApiKey = async () => {
-        if (apiKey.trim()) {
-            await geminiService.setApiKey(apiKey.trim());
-            setHasApiKey(true);
-            setShowSettings(false);
-            Alert.alert('저장 완료', 'API 키가 저장되었습니다.');
-        } else {
-            Alert.alert('오류', 'API 키를 입력해주세요.');
-        }
-    };
-
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const todayTasks = tasks.filter(t => !t.completed && t.date === today);
@@ -60,16 +40,7 @@ export default function HomeScreen() {
         <View style={{ flex: 1 }}>
             <ScrollView style={styles.container}>
                 <View style={styles.content}>
-                    {/* Settings Button */}
-                    <TouchableOpacity
-                        style={styles.settingsButton}
-                        onPress={() => setShowSettings(true)}
-                    >
-                        <Icons.Location size={20} color={hasApiKey ? Colors.primary : Colors.slate400} />
-                        <Text style={[styles.settingsText, hasApiKey && { color: Colors.primary }]}>
-                            {hasApiKey ? 'API 설정됨' : 'API 설정'}
-                        </Text>
-                    </TouchableOpacity>
+
 
                     {/* Stats */}
                     <View style={styles.statsRow}>
@@ -161,35 +132,7 @@ export default function HomeScreen() {
                 </View>
             </ScrollView>
 
-            {/* Settings Modal */}
-            <Modal visible={showSettings} animationType="slide" presentationStyle="pageSheet">
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>API 설정</Text>
-                        <TouchableOpacity onPress={() => setShowSettings(false)}>
-                            <Text style={styles.modalClose}>닫기</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.label}>Gemini API 키</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="API 키를 입력하세요"
-                            value={apiKey}
-                            onChangeText={setApiKey}
-                            placeholderTextColor={Colors.slate400}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                        <Text style={styles.helpText}>
-                            AI 문구 생성 기능을 사용하려면 Google Gemini API 키가 필요합니다.
-                        </Text>
-                        <TouchableOpacity style={styles.saveButton} onPress={handleSaveApiKey}>
-                            <Text style={styles.saveButtonText}>저장하기</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
+
         </View>
     );
 }

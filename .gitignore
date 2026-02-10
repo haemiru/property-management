@@ -22,3 +22,25 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Sensitive files - DO NOT PUSH
+supabase-db-password
+google-OAuth-client-ID-PW
+.env
+.env.*
+
+# Debug/temp files
+check_columns.cjs
+check_columns.js
+expo-app/debug_*.js
+expo-app/debug_*.ts
+
+# Android build artifacts
+expo-app/android/.gradle
+expo-app/android/app/build
+expo-app/android/build
+*.apk
+*.aab
+
+# Expo
+.expo

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ScrollView, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors, Icons } from '../../src/constants';
-import { storage } from '../../src/storage';
+import { storage } from '../../src/storageService';
 import { BrokerInfo } from '../../src/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -124,6 +124,16 @@ export default function SettingsScreen() {
 
                     <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
                         <Text style={styles.saveButtonText}>저장하기</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.saveButton, { backgroundColor: Colors.slate500, marginTop: 12 }]}
+                        onPress={async () => {
+                            const { displayIncomingCallNotification } = await import('../../src/services/notificationService');
+                            await displayIncomingCallNotification('테스트 고객', '이것은 테스트 메모입니다.', '2023-10-27 14:00 (3분)');
+                        }}
+                    >
+                        <Text style={styles.saveButtonText}>알림 테스트 (5초 후 발생)</Text>
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>

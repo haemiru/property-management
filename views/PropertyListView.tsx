@@ -1,26 +1,126 @@
 
-import React, { useState, useMemo, useRef } from 'react';
-import { Property, PropertyType, TransactionType, Client } from '../types';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Property, PropertyType, TransactionType, Client, LAND_USE_ZONES, LAND_CATEGORIES, BUILDING_USES, BuildingDetail } from '../types';
 import { Icons } from '../constants';
 import { generatePropertyDescription } from '../services/geminiService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+// AreaInput 컴포넌트 - 평/m² 변환 지원
+// Simple UUID generator
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+interface AreaInputProps {
+  label: string;
+  valueM2?: number;
+  onChangeM2: (val: number | undefined) => void;
+}
+
+const AreaInput: React.FC<AreaInputProps> = ({ label, valueM2, onChangeM2 }) => {
+  const [unit, setUnit] = useState<'py' | 'm2'>('py');
+  const [inputValue, setInputValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+
+  React.useEffect(() => {
+    if (!isFocused) {
+      if (valueM2 === undefined || valueM2 === 0) {
+        setInputValue('');
+      } else {
+        const val = unit === 'py' ? (valueM2 / 3.3058) : valueM2;
+        setInputValue(val.toFixed(2).replace(/\.00$/, ''));
+      }
+    }
+  }, [valueM2, unit, isFocused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setInputValue(raw);
+    const val = parseFloat(raw);
+    if (isNaN(val) || raw === '') {
+      onChangeM2(undefined);
+      return;
+    }
+    if (unit === 'py') {
+      onChangeM2(val * 3.3058);
+    } else {
+      onChangeM2(val);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (valueM2 !== undefined && valueM2 !== 0) {
+      const val = unit === 'py' ? (valueM2 / 3.3058) : valueM2;
+      setInputValue(val.toFixed(2).replace(/\.00$/, ''));
+    }
+  };
+
+  const toggleUnit = () => {
+    setUnit(prev => prev === 'py' ? 'm2' : 'py');
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-semibold text-slate-500">{label}</label>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none pr-12"
+            placeholder={unit === 'py' ? "평 단위 입력" : "m² 단위 입력"}
+            value={inputValue}
+            onChange={handleChange}
+            onFocus={() => setIsFocused(true)}
+            onBlur={handleBlur}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+            {unit === 'py' ? '평' : 'm²'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={toggleUnit}
+          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-600 whitespace-nowrap transition-colors"
+        >
+          {unit === 'py' ? 'm²로 변환' : '평으로 변환'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 interface PropertyListViewProps {
   properties: Property[];
   clients: Client[];
   onAdd: (p: Property) => void;
+  onUpdate: (p: Property) => void;
   onDelete: (id: string) => void;
 }
 
-const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients, onAdd, onDelete }) => {
+const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients, onAdd, onUpdate, onDelete }) => {
+  const location = useLocation();
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
-  
+
+  useEffect(() => {
+    if (location.state?.selectedId) {
+      setSelectedPropertyId(location.state.selectedId);
+    }
+  }, [location.state]);
+
   const reportRef = useRef<HTMLDivElement>(null);
-  
+
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<PropertyType | '전체'>('전체');
@@ -33,60 +133,103 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
     type: PropertyType.HOUSE,
     transactionType: TransactionType.SALE,
     images: [],
-    priceAmount: 0
+    priceAmount: 0,
+    buildings: []
   });
-  
+
+  // Building management
+  const [newBuilding, setNewBuilding] = useState<BuildingDetail>({
+    id: '',
+    name: '',
+    area: 0,
+    floor: undefined,
+    totalFloorArea: 0,
+    use: '',
+    specificUse: '',
+    structureHeight: '',
+    usageApprovalDate: '',
+    note: ''
+  });
+
+  const addBuilding = () => {
+    if (!newBuilding.name) {
+      alert('건물 명칭을 입력해주세요.');
+      return;
+    }
+    const buildingToAdd = { ...newBuilding, id: generateUUID() };
+    setNewProp(prev => ({
+      ...prev,
+      buildings: [...(prev.buildings || []), buildingToAdd]
+    }));
+    setNewBuilding({
+      id: '',
+      name: '',
+      area: 0,
+      floor: undefined,
+      totalFloorArea: 0,
+      use: '',
+      specificUse: '',
+      structureHeight: '',
+      usageApprovalDate: '',
+      note: ''
+    });
+  };
+
+  const removeBuilding = (id: string) => {
+    setNewProp(prev => ({
+      ...prev,
+      buildings: (prev.buildings || []).filter(b => b.id !== id)
+    }));
+  };
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<string>('');
 
   const filteredProperties = useMemo(() => {
     return properties.filter(prop => {
       const matchesSearch = prop.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          prop.address.toLowerCase().includes(searchTerm.toLowerCase());
+        prop.address.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === '전체' || prop.type === filterType;
       const matchesTransaction = filterTransaction === '전체' || prop.transactionType === filterTransaction;
-      
+
       const priceNum = prop.priceAmount || 0;
       const matchesMinPrice = minPrice === '' || priceNum >= parseInt(minPrice);
       const matchesMaxPrice = maxPrice === '' || priceNum <= parseInt(maxPrice);
-      
+
       const matchesClient = filterClientId === '' || prop.clientId === filterClientId;
 
       return matchesSearch && matchesType && matchesTransaction && matchesMinPrice && matchesMaxPrice && matchesClient;
     });
   }, [properties, searchTerm, filterType, filterTransaction, minPrice, maxPrice, filterClientId]);
 
-  const selectedProperty = useMemo(() => 
-    properties.find(p => p.id === selectedPropertyId), 
+  const selectedProperty = useMemo(() =>
+    properties.find(p => p.id === selectedPropertyId),
     [properties, selectedPropertyId]
   );
 
   const handleShareProperty = async () => {
     if (!selectedProperty || !reportRef.current) return;
-    
+
     setIsSharing(true);
     try {
-      // 1. Generate Canvas from the hidden report template
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff'
       });
-      
+
       const imgData = canvas.toDataURL('image/jpeg', 0.85);
-      
-      // 2. Create PDF
+
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
+
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      
+
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], `${selectedProperty.title}_보고서.pdf`, { type: 'application/pdf' });
 
-      // 3. Share via Web Share API
       if (navigator.share && navigator.canShare({ files: [pdfFile] })) {
         await navigator.share({
           files: [pdfFile],
@@ -94,7 +237,6 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
           text: `${selectedProperty.price} - ${selectedProperty.address}`
         });
       } else {
-        // Fallback for desktop: download the file
         pdf.save(`${selectedProperty.title}_보고서.pdf`);
         alert('모바일 공유가 지원되지 않는 환경입니다. 보고서가 다운로드되었습니다.');
       }
@@ -156,7 +298,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
     }
   };
 
-  const getGPSLocation = (): Promise<{lat: number, lng: number} | undefined> => {
+  const getGPSLocation = (): Promise<{ lat: number, lng: number } | undefined> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
         console.warn("Geolocation not supported");
@@ -192,9 +334,10 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProp.title) return;
-    
-    onAdd({
-      id: Date.now().toString(),
+
+    const propertyData = {
+      id: editingId || generateUUID(),
+      managementId: newProp.managementId,
       title: newProp.title!,
       type: newProp.type as PropertyType,
       transactionType: newProp.transactionType as TransactionType,
@@ -204,10 +347,45 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
       description: newProp.description || '',
       images: newProp.images || [],
       clientId: newProp.clientId,
-      createdAt: Date.now()
+      createdAt: newProp.createdAt || Date.now(),
+      landArea: newProp.landArea,
+      landUseZone: newProp.landUseZone,
+      landCategory: newProp.landCategory,
+      roadCondition: newProp.roadCondition,
+      buildings: newProp.buildings,
+      buildingArea: newProp.buildingArea,
+      structureHeight: newProp.structureHeight,
+      usageApprovalDate: newProp.usageApprovalDate,
+      water: newProp.water,
+      sewage: newProp.sewage,
+      deposit: newProp.deposit,
+      monthlyRent: newProp.monthlyRent
+    };
+
+    if (editingId) {
+      onUpdate(propertyData as Property);
+    } else {
+      onAdd(propertyData as Property);
+    }
+
+    setNewProp({
+      type: PropertyType.HOUSE,
+      transactionType: TransactionType.SALE,
+      images: [],
+      priceAmount: 0,
+      buildings: [],
+      deposit: 0,
+      monthlyRent: 0
     });
-    setNewProp({ type: PropertyType.HOUSE, transactionType: TransactionType.SALE, images: [], priceAmount: 0 });
+    setNewBuilding({ id: '', name: '', area: 0, floor: undefined, totalFloorArea: 0, use: '', specificUse: '', structureHeight: '', usageApprovalDate: '', note: '' });
     setIsAdding(false);
+    setEditingId(null);
+  };
+
+  const handleStartEdit = (prop: Property) => {
+    setNewProp(prop);
+    setEditingId(prop.id);
+    setIsAdding(true);
   };
 
   const resetFilters = () => {
@@ -273,16 +451,16 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
         </div>
 
         <div className="bg-white border-b border-slate-100 p-4 sticky top-0 z-20 flex items-center space-x-2">
-          <button 
+          <button
             onClick={() => setSelectedPropertyId(null)}
             className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-600 mr-2"
           >
             <Icons.ChevronLeft />
           </button>
           <h2 className="font-bold text-lg truncate flex-1">{selectedProperty.title}</h2>
-          
+
           <div className="flex items-center space-x-1">
-            <button 
+            <button
               onClick={handleShareProperty}
               disabled={isSharing}
               className={`p-2 rounded-full transition-colors ${isSharing ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
@@ -294,7 +472,14 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                 <Icons.Share />
               )}
             </button>
-            <button 
+            <button
+              onClick={() => handleStartEdit(selectedProperty)}
+              className="p-2 rounded-full transition-colors text-indigo-600 hover:bg-indigo-50"
+              title="매물 수정"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>
+            <button
               onClick={() => {
                 if (confirm('정말로 이 매물을 삭제하시겠습니까?')) {
                   onDelete(selectedProperty.id);
@@ -367,16 +552,16 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                       <p className="text-xs text-slate-500">{connectedClient.role}</p>
                     </div>
                   </div>
-                  <a 
+                  <a
                     href={`tel:${connectedClient.phone}`}
                     className="bg-emerald-500 text-white p-2.5 rounded-full shadow-md"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
                   </a>
                 </div>
               </section>
             )}
-            
+
             <div className="text-[10px] text-slate-300 text-center pt-4">
               등록일: {new Date(selectedProperty.createdAt).toLocaleString()}
             </div>
@@ -391,14 +576,14 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">매물 관리</h2>
         <div className="flex items-center space-x-2">
-          <button 
+          <button
             onClick={handleExportCSV}
             title="엑셀로 내보내기"
             className="bg-white border border-slate-200 text-slate-600 p-2 rounded-full shadow-sm hover:bg-slate-50 transition-colors"
           >
             <Icons.Download />
           </button>
-          <button 
+          <button
             onClick={() => setIsAdding(true)}
             className="bg-indigo-600 text-white p-2 rounded-full shadow-lg"
           >
@@ -414,15 +599,15 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
               <Icons.Search />
             </div>
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="매물명 또는 주소 검색"
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowFilters(!showFilters)}
             className={`px-3 rounded-xl border transition-all flex items-center space-x-1 ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}
           >
@@ -437,7 +622,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">매물 구분</label>
-                <select 
+                <select
                   className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value as any)}
@@ -448,7 +633,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">거래 종류</label>
-                <select 
+                <select
                   className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
                   value={filterTransaction}
                   onChange={(e) => setFilterTransaction(e.target.value as any)}
@@ -462,17 +647,17 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">금액 범위 (단위: 만원)</label>
               <div className="flex items-center space-x-2">
-                <input 
-                  type="number" 
-                  placeholder="최소" 
+                <input
+                  type="number"
+                  placeholder="최소"
                   className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
                   value={minPrice}
                   onChange={(e) => setMinPrice(e.target.value)}
                 />
                 <span className="text-slate-300">~</span>
-                <input 
-                  type="number" 
-                  placeholder="최대" 
+                <input
+                  type="number"
+                  placeholder="최대"
                   className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(e.target.value)}
@@ -482,7 +667,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
 
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">담당 고객</label>
-              <select 
+              <select
                 className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
                 value={filterClientId}
                 onChange={(e) => setFilterClientId(e.target.value)}
@@ -492,7 +677,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
               </select>
             </div>
 
-            <button 
+            <button
               onClick={resetFilters}
               className="w-full py-2 text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors border-t border-slate-100 mt-2"
             >
@@ -507,12 +692,12 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
           <div className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center">
               <h3 className="font-bold">신규 매물 등록</h3>
-              <button onClick={() => setIsAdding(false)} className="text-slate-400">닫기</button>
+              <button onClick={() => { setIsAdding(false); setEditingId(null); }} className="text-slate-400">닫기</button>
             </div>
             <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1">
               {/* Photo Input */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 uppercase">현장 사진</label>
+                <label className="text-xs font-semibold text-slate-500">현장 사진/동영상</label>
                 <div className="grid grid-cols-4 gap-2">
                   <label className="aspect-square bg-slate-100 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-200 cursor-pointer">
                     <Icons.Camera />
@@ -526,15 +711,27 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                 </div>
               </div>
 
-              {/* Basic Info */}
+              {/* 물건번호 */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 uppercase">매물명</label>
-                <input 
-                  type="text" 
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+                <label className="text-xs font-semibold text-slate-500">물건번호</label>
+                <input
+                  type="text"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                  placeholder="예: 1001"
+                  value={newProp.managementId || ''}
+                  onChange={e => setNewProp({ ...newProp, managementId: e.target.value })}
+                />
+              </div>
+
+              {/* 매물명 */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500">매물명</label>
+                <input
+                  type="text"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                   placeholder="예: 강남역 도보 5분 오피스텔"
                   value={newProp.title || ''}
-                  onChange={e => setNewProp({...newProp, title: e.target.value})}
+                  onChange={e => setNewProp({ ...newProp, title: e.target.value })}
                   required
                 />
               </div>
@@ -542,78 +739,322 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500 uppercase">매물 구분</label>
-                  <select 
+                  <select
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                     value={newProp.type}
-                    onChange={e => setNewProp({...newProp, type: e.target.value as PropertyType})}
+                    onChange={e => setNewProp({ ...newProp, type: e.target.value as PropertyType })}
                   >
                     {Object.values(PropertyType).map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500 uppercase">거래 종류</label>
-                  <select 
+                  <select
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                     value={newProp.transactionType}
-                    onChange={e => setNewProp({...newProp, transactionType: e.target.value as TransactionType})}
+                    onChange={e => setNewProp({ ...newProp, transactionType: e.target.value as TransactionType })}
                   >
                     {Object.values(TransactionType).map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase">표시 가격</label>
-                  <input 
-                    type="text" 
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" 
-                    placeholder="예: 5억 / 200"
-                    value={newProp.price || ''}
-                    onChange={e => setNewProp({...newProp, price: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase">검색용 금액 (만원)</label>
-                  <input 
-                    type="number" 
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" 
-                    placeholder="예: 50000"
-                    value={newProp.priceAmount || ''}
-                    onChange={e => setNewProp({...newProp, priceAmount: parseInt(e.target.value) || 0})}
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500">
+                  {newProp.transactionType === TransactionType.RENT ? '보증금 (천원 단위)' : `금액 (${newProp.transactionType === TransactionType.SALE ? '매매가' : '보증금'}, 천원 단위)`}
+                </label>
+                {newProp.transactionType === TransactionType.RENT ? (
+                  // 월세인 경우: 보증금 + 월세 입력
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                        placeholder="예: 10000 (=> 1000만원)"
+                        value={newProp.deposit || ''}
+                        onChange={e => {
+                          const val = parseInt(e.target.value) || 0;
+                          // Format Deposit
+                          let fmt = '';
+                          if (val > 0) {
+                            const uk = Math.floor(val / 10000);
+                            const rem = val % 10000;
+                            if (uk > 0 && rem > 0) fmt = `${uk}억 ${rem}만원`;
+                            else if (uk > 0) fmt = `${uk}억원`;
+                            else fmt = `${rem}만원`;
+                          }
+
+                          // Update Price String (Deposit / Rent)
+                          const rentName = newProp.monthlyRent ? ` / ${newProp.monthlyRent}만원` : '';
+                          const priceStr = fmt ? `보증금 ${fmt}${rentName}` : '가격 협의';
+
+                          setNewProp({ ...newProp, deposit: val, priceAmount: val, price: priceStr });
+                        }}
+                      />
+                      {newProp.deposit ? (
+                        <p className="text-xs text-indigo-600 font-bold">
+                          보증금: {(() => {
+                            const val = newProp.deposit || 0;
+                            const uk = Math.floor(val / 10000);
+                            const rem = val % 10000;
+                            if (uk > 0 && rem > 0) return `${uk}억 ${rem}만원`;
+                            if (uk > 0) return `${uk}억원`;
+                            return `${rem}만원`;
+                          })()}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500">월 임대료 (만원 단위)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                        placeholder="예: 100 (=> 100만원)"
+                        value={newProp.monthlyRent || ''}
+                        onChange={e => {
+                          const val = parseInt(e.target.value) || 0;
+
+                          // Re-calculate Deposit Format
+                          const dVal = newProp.deposit || 0;
+                          let dFmt = '';
+                          if (dVal > 0) {
+                            const uk = Math.floor(dVal / 10000);
+                            const rem = dVal % 10000;
+                            if (uk > 0 && rem > 0) dFmt = `${uk}억 ${rem}만원`;
+                            else if (uk > 0) dFmt = `${uk}억원`;
+                            else dFmt = `${rem}만원`;
+                          }
+
+                          const priceStr = dFmt ? `보증금 ${dFmt} / ${val}만원` : `월세 ${val}만원`;
+                          setNewProp({ ...newProp, monthlyRent: val, price: priceStr });
+                        }}
+                      />
+                      {newProp.monthlyRent ? <p className="text-xs text-indigo-600 font-bold">월세: {newProp.monthlyRent}만원</p> : null}
+                    </div>
+                  </div>
+                ) : (
+                  // 매매/전세인 경우: 단일 금액 입력
+                  <>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                      placeholder="예: 50000 (=> 5억원)"
+                      value={newProp.priceAmount || ''}
+                      onChange={e => {
+                        const val = parseInt(e.target.value) || 0;
+                        // Auto format price string
+                        let formattedPrice = '가격 협의';
+                        if (val > 0) {
+                          const uk = Math.floor(val / 10000);
+                          const remainder = val % 10000;
+                          if (uk > 0 && remainder > 0) formattedPrice = `${uk}억 ${remainder}만원`;
+                          else if (uk > 0) formattedPrice = `${uk}억원`;
+                          else formattedPrice = `${remainder}만원`;
+                        }
+                        setNewProp({ ...newProp, priceAmount: val, price: formattedPrice });
+                      }}
+                    />
+                    {newProp.price && (
+                      <p className="text-sm font-bold text-indigo-600 mt-1">{newProp.price}</p>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 uppercase">관련 고객 (선택)</label>
-                <select 
+                <label className="text-xs font-semibold text-slate-500">주소</label>
+                <input
+                  type="text"
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
-                  value={newProp.clientId || ''}
-                  onChange={e => setNewProp({...newProp, clientId: e.target.value})}
-                >
-                  <option value="">고객 선택 없음</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 uppercase">주소</label>
-                <input 
-                  type="text" 
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" 
                   placeholder="상세 주소를 입력하세요"
                   value={newProp.address || ''}
-                  onChange={e => setNewProp({...newProp, address: e.target.value})}
+                  onChange={e => setNewProp({ ...newProp, address: e.target.value })}
                 />
               </div>
 
+              {/* 공장/창고 & 토지 전용 필드 */}
+              {(newProp.type === PropertyType.FACTORY_WAREHOUSE || newProp.type === PropertyType.LAND) && (
+                <>
+                  <div className="bg-slate-50 p-3 rounded-xl space-y-3 border border-slate-200">
+                    <h4 className="text-xs font-bold text-indigo-600 flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                      공장/창고 상세 정보
+                    </h4>
+
+                    {/* 대지면적 - AreaInput 사용 */}
+                    <AreaInput
+                      label="대지면적"
+                      valueM2={newProp.landArea}
+                      onChangeM2={(val) => setNewProp({ ...newProp, landArea: val })}
+                    />
+                  </div>
+
+                  {/* 건물 정보 (공장/창고일 때만) */}
+                  {newProp.type === PropertyType.FACTORY_WAREHOUSE && (
+                    <div className="bg-slate-50 p-3 rounded-xl space-y-3 border border-slate-200">
+                      <h4 className="text-xs font-bold text-indigo-600 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"></path></svg>
+                        건물 정보
+                      </h4>
+
+                      {/* 등록된 건물 목록 */}
+                      {(newProp.buildings || []).map((bld, idx) => (
+                        <div key={bld.id} className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
+                          <div className="flex justify-between items-center">
+                            <h5 className="font-bold text-sm text-slate-700">{bld.name || `건물 ${idx + 1}`}</h5>
+                            <button type="button" onClick={() => removeBuilding(bld.id)} className="text-red-500 text-xs">삭제</button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+                            <div>{bld.floor ? `${bld.floor}층` : '-'} | 건평: {(bld.area / 3.3058).toFixed(1)}평</div>
+                            <div>연면적: {(bld.totalFloorArea / 3.3058).toFixed(1)}평</div>
+                            <div>용도: {bld.use}</div>
+                            <div>구조: {bld.structureHeight}</div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* 건물 추가 폼 */}
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-3">
+                        <p className="text-xs font-bold text-slate-700">+ 건물 추가</p>
+
+                        {/* 용도지역 - This was incorrectly placed inside buildings in layout, moving OUT in next block, but wait, screenshot shows 용도지역 AFTER building list */}
+                        {/* Actually, looking at screenshot 1, it has Building 1 (with name 주건물). Below it is Building Add Form? Or Building details? */}
+                        {/* Screenshot 2 shows "건물 1" expanded inputs. It seems to be editing "건물 1". */}
+                        {/* Screenshot 3 shows "용도지역" below "건물 추가" section. */}
+
+                        {/* Replicating Building Add Form */}
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                              placeholder="건물 명칭 (예: 가동)"
+                              value={newBuilding.name}
+                              onChange={e => setNewBuilding({ ...newBuilding, name: e.target.value })}
+                            />
+                            <input
+                              type="number"
+                              className="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                              placeholder="층수"
+                              value={newBuilding.floor || ''}
+                              onChange={e => setNewBuilding({ ...newBuilding, floor: parseInt(e.target.value) || undefined })}
+                            />
+                          </div>
+                          <AreaInput label="건평" valueM2={newBuilding.area} onChangeM2={v => setNewBuilding({ ...newBuilding, area: v || 0 })} />
+                          <AreaInput label="연면적" valueM2={newBuilding.totalFloorArea} onChangeM2={v => setNewBuilding({ ...newBuilding, totalFloorArea: v || 0 })} />
+
+                          <select
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                            value={newBuilding.use || ''}
+                            onChange={e => setNewBuilding({ ...newBuilding, use: e.target.value })}
+                          >
+                            <option value="">건축물 용도 선택</option>
+                            {BUILDING_USES.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+
+                          <input type="text" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" placeholder="세부 용도" value={newBuilding.specificUse || ''} onChange={e => setNewBuilding({ ...newBuilding, specificUse: e.target.value })} />
+                          <input type="text" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" placeholder="구조 / 층고" value={newBuilding.structureHeight || ''} onChange={e => setNewBuilding({ ...newBuilding, structureHeight: e.target.value })} />
+                          <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" value={newBuilding.usageApprovalDate || ''} onChange={e => setNewBuilding({ ...newBuilding, usageApprovalDate: e.target.value })} />
+                          <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none h-16" placeholder="비고" value={newBuilding.note || ''} onChange={e => setNewBuilding({ ...newBuilding, note: e.target.value })} />
+
+                          <button type="button" onClick={addBuilding} className="w-full bg-indigo-500 text-white font-bold py-2 rounded-lg text-sm hover:bg-indigo-600 transition-colors">
+                            + 건물 추가
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 나머지 상세 정보 (용도지역, 도로조건, 수도, 하수) */}
+                  <div className="bg-slate-50 p-3 rounded-xl space-y-3 border border-slate-200">
+                    {/* 용도지역 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500">용도지역</label>
+                      <select
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                        value={newProp.landUseZone || ''}
+                        onChange={e => setNewProp({ ...newProp, landUseZone: e.target.value })}
+                      >
+                        <option value="">선택하세요</option>
+                        {LAND_USE_ZONES.map(zone => <option key={zone} value={zone}>{zone}</option>)}
+                      </select>
+                    </div>
+
+                    {/* 도로조건 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500">도로조건</label>
+                      <input
+                        type="text"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+                        placeholder="예: 6m 도로 접"
+                        value={newProp.roadCondition || ''}
+                        onChange={e => setNewProp({ ...newProp, roadCondition: e.target.value })}
+                      />
+                    </div>
+
+                    {/* 수도 체크박스 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500">수도</label>
+                      <div className="flex gap-4">
+                        {['상수도', '지하수'].map(opt => (
+                          <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 accent-indigo-600"
+                              checked={(newProp.water || []).includes(opt)}
+                              onChange={() => {
+                                const current = newProp.water || [];
+                                const exists = current.includes(opt);
+                                setNewProp({
+                                  ...newProp,
+                                  water: exists ? current.filter(i => i !== opt) : [...current, opt]
+                                });
+                              }}
+                            />
+                            <span className="text-sm">{opt}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 하수처리 체크박스 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500">하수처리</label>
+                      <div className="flex gap-4">
+                        {['직관연결', '정화조'].map(opt => (
+                          <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 accent-indigo-600"
+                              checked={(newProp.sewage || []).includes(opt)}
+                              onChange={() => {
+                                const current = newProp.sewage || [];
+                                const exists = current.includes(opt);
+                                setNewProp({
+                                  ...newProp,
+                                  sewage: exists ? current.filter(i => i !== opt) : [...current, opt]
+                                });
+                              }}
+                            />
+                            <span className="text-sm">{opt}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="space-y-1">
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase">
+                  <label className="text-xs font-semibold text-slate-500">
                     설명 {gpsStatus && <span className="text-indigo-500 ml-1 text-[10px] animate-pulse">{gpsStatus}</span>}
                   </label>
-                  <button 
+                  <button
                     type="button"
                     onClick={handleGenerateAI}
                     disabled={isGenerating}
@@ -632,66 +1073,82 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                     )}
                   </button>
                 </div>
-                <textarea 
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none h-24" 
+                <textarea
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none h-24"
                   placeholder="상세 설명을 입력하세요."
                   value={newProp.description || ''}
-                  onChange={e => setNewProp({...newProp, description: e.target.value})}
+                  onChange={e => setNewProp({ ...newProp, description: e.target.value })}
                 ></textarea>
               </div>
 
               <button className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-lg mt-4">
                 매물 등록하기
               </button>
+
             </form>
           </div>
         </div>
       )}
 
-      {/* List */}
-      <div className="space-y-4">
+      {/* Card Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredProperties.length === 0 ? (
-          <div className="text-center py-20 text-slate-400">
-             <div className="flex justify-center mb-2 opacity-20"><Icons.Building /></div>
-             {(searchTerm || filterType !== '전체' || filterTransaction !== '전체' || minPrice || maxPrice || filterClientId) ? '필터 결과가 없습니다.' : '등록된 매물이 없습니다.'}
+          <div className="col-span-full text-center py-20 text-slate-400">
+            <div className="flex justify-center mb-2 opacity-20"><Icons.Building /></div>
+            {(searchTerm || filterType !== '전체' || filterTransaction !== '전체' || minPrice || maxPrice || filterClientId) ? '필터 결과가 없습니다.' : '등록된 매물이 없습니다.'}
           </div>
         ) : (
           filteredProperties.map(prop => (
-            <div 
-              key={prop.id} 
+            <div
+              key={prop.id}
               onClick={() => setSelectedPropertyId(prop.id)}
-              className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+              className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all cursor-pointer group"
             >
-              <div className="h-40 bg-slate-100 relative overflow-hidden">
+              {/* Image Section */}
+              <div className="h-48 bg-slate-100 relative overflow-hidden">
                 {prop.images[0] ? (
-                  <img src={prop.images[0]} alt="" className="w-full h-full object-cover" />
+                  <img src={prop.images[0]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-300">
                     <Icons.Building />
                   </div>
                 )}
-                <div className="absolute top-3 left-3 flex space-x-1">
-                  <div className="bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold text-indigo-600 shadow-sm">
+                {/* Badges */}
+                <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+                  <div className="bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-600 shadow-sm">
                     {prop.type}
                   </div>
-                  <div className={`bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold shadow-sm ${prop.transactionType === TransactionType.SALE ? 'text-orange-600' : 'text-emerald-600'}`}>
+                  <div className={`bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm ${prop.transactionType === TransactionType.SALE ? 'text-orange-600' : 'text-emerald-600'}`}>
                     {prop.transactionType}
                   </div>
                 </div>
-              </div>
-              <div className="p-4">
-                <div className="flex justify-between items-start mb-1">
-                  <div className="min-w-0 flex-1 mr-2">
-                    <h3 className="font-bold text-slate-800 text-lg leading-tight truncate">{prop.title}</h3>
+                {/* Management ID Badge */}
+                {prop.managementId && (
+                  <div className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white px-2 py-1 rounded-lg text-[10px] font-mono">
+                    #{prop.managementId}
                   </div>
-                  <span className="text-indigo-600 font-bold text-lg whitespace-nowrap">{prop.price}</span>
-                </div>
-                <p className="text-xs text-slate-500 flex items-center mb-3">
-                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>
-                  {prop.address}
+                )}
+              </div>
+
+              {/* Content Section */}
+              <div className="p-5">
+                {/* Price - Prominent */}
+                <div className="text-indigo-600 font-bold text-xl mb-2">{prop.price}</div>
+
+                {/* Title */}
+                <h3 className="font-bold text-slate-800 text-lg leading-tight mb-2 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                  {prop.title}
+                </h3>
+
+                {/* Address */}
+                <p className="text-sm text-slate-500 flex items-center mb-3">
+                  <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>
+                  <span className="line-clamp-1">{prop.address}</span>
                 </p>
-                <div className="bg-slate-50 p-2 rounded-lg text-xs text-slate-600 line-clamp-2 whitespace-pre-line">
-                  {prop.description}
+
+                {/* Description Preview */}
+                <div className="bg-slate-50 p-3 rounded-xl text-xs text-slate-600 line-clamp-2 whitespace-pre-line">
+                  {prop.description || '상세 설명이 없습니다.'}
                 </div>
               </div>
             </div>
