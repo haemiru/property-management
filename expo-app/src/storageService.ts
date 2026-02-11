@@ -246,9 +246,13 @@ export const storage = {
     },
 
     // BROKER INFO (Keep Local for now)
+
     async getBrokerInfo(): Promise<BrokerInfo | null> {
         try {
-            const data = await AsyncStorage.getItem(KEYS.BROKER_INFO);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
+
+            const data = await AsyncStorage.getItem(`${KEYS.BROKER_INFO}_${user.id}`);
             return data ? JSON.parse(data) : null;
         } catch {
             return null;
@@ -256,7 +260,9 @@ export const storage = {
     },
 
     async setBrokerInfo(info: BrokerInfo): Promise<void> {
-        await AsyncStorage.setItem(KEYS.BROKER_INFO, JSON.stringify(info));
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        await AsyncStorage.setItem(`${KEYS.BROKER_INFO}_${user.id}`, JSON.stringify(info));
     },
 
     // Helper for background services
@@ -272,7 +278,10 @@ export const storage = {
     // APP SETTINGS
     async getAppSettings(): Promise<{ propertyTypeOrder: string[]; defaultAreaUnit: 'py' | 'm2' }> {
         try {
-            const data = await AsyncStorage.getItem(KEYS.APP_SETTINGS);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return { propertyTypeOrder: Object.values(PropertyType), defaultAreaUnit: 'py' };
+
+            const data = await AsyncStorage.getItem(`${KEYS.APP_SETTINGS}_${user.id}`);
             if (data) {
                 const parsed = JSON.parse(data);
                 const allTypes = Object.values(PropertyType);
@@ -293,6 +302,9 @@ export const storage = {
     },
 
     async setAppSettings(settings: { propertyTypeOrder: string[]; defaultAreaUnit: 'py' | 'm2' }): Promise<void> {
-        await AsyncStorage.setItem(KEYS.APP_SETTINGS, JSON.stringify(settings));
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        await AsyncStorage.setItem(`${KEYS.APP_SETTINGS}_${user.id}`, JSON.stringify(settings));
     }
 };

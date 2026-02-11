@@ -3,7 +3,9 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Property, PropertyType, TransactionType, Client, LAND_USE_ZONES, LAND_CATEGORIES, BUILDING_USES, BuildingDetail } from '../types';
 import { Icons } from '../constants';
+
 import { getAppSettings } from './SettingsView';
+import { useAuth } from '../src/contexts/AuthContext';
 import { generatePropertyDescription } from '../services/geminiService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -112,8 +114,10 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
   const [isAdding, setIsAdding] = useState(false);
 
   // Load app settings
-  const appSettings = useMemo(() => getAppSettings(), []);
+  const { user } = useAuth();
+  const appSettings = useMemo(() => getAppSettings(user?.id), [user?.id]);
   const orderedTypes = appSettings.propertyTypeOrder as PropertyType[];
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
@@ -136,12 +140,22 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
   const [filterClientId, setFilterClientId] = useState<string>('');
 
   const [newProp, setNewProp] = useState<Partial<Property>>({
-    type: PropertyType.HOUSE,
+    type: orderedTypes[0] || PropertyType.HOUSE,
     transactionType: TransactionType.SALE,
     images: [],
     priceAmount: 0,
     buildings: []
   });
+
+  // Update default type when orderedTypes changes (e.g. user login/settings load)
+  useEffect(() => {
+    if (!isAdding && !editingId && orderedTypes.length > 0) {
+      setNewProp(prev => ({
+        ...prev,
+        type: orderedTypes[0]
+      }));
+    }
+  }, [orderedTypes, isAdding, editingId]);
 
   // Building management
   const [newBuilding, setNewBuilding] = useState<BuildingDetail>({
@@ -375,7 +389,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
     }
 
     setNewProp({
-      type: PropertyType.HOUSE,
+      type: orderedTypes[0] || PropertyType.HOUSE,
       transactionType: TransactionType.SALE,
       images: [],
       priceAmount: 0,

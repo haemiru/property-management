@@ -18,8 +18,9 @@ export interface AppSettings {
 
 const DEFAULT_PROPERTY_TYPE_ORDER = Object.values(PropertyType);
 
-export function getAppSettings(): AppSettings {
-    const data = localStorage.getItem('appSettings');
+export function getAppSettings(userId?: string): AppSettings {
+    if (!userId) return { propertyTypeOrder: DEFAULT_PROPERTY_TYPE_ORDER, defaultAreaUnit: 'py' };
+    const data = localStorage.getItem(`appSettings_${userId}`);
     if (data) {
         try {
             const parsed = JSON.parse(data);
@@ -55,28 +56,39 @@ const SettingsView: React.FC = () => {
     const [areaUnit, setAreaUnit] = useState<'py' | 'm2'>('py');
 
     useEffect(() => {
-        const data = localStorage.getItem('brokerInfo');
+        if (!user) return;
+        const data = localStorage.getItem(`brokerInfo_${user.id}`);
         if (data) {
             setInfo(JSON.parse(data));
+        } else {
+            // Reset info if no data found for this user (to avoid showing previous user's data)
+            setInfo({
+                businessName: '',
+                address: '',
+                name: '',
+                phone: '',
+            });
         }
-        const settings = getAppSettings();
+        const settings = getAppSettings(user.id);
         setTypeOrder(settings.propertyTypeOrder);
         setAreaUnit(settings.defaultAreaUnit);
-    }, []);
+    }, [user]);
 
     const handleSave = () => {
         if (!info.businessName || !info.name) {
             alert('상호와 성명은 필수 입력입니다.');
             return;
         }
-        localStorage.setItem('brokerInfo', JSON.stringify(info));
-        // Save app settings
-        const appSettings: AppSettings = {
-            propertyTypeOrder: typeOrder,
-            defaultAreaUnit: areaUnit,
-        };
-        localStorage.setItem('appSettings', JSON.stringify(appSettings));
-        setSaved(true);
+        if (user) {
+            localStorage.setItem(`brokerInfo_${user.id}`, JSON.stringify(info));
+            // Save app settings
+            const appSettings: AppSettings = {
+                propertyTypeOrder: typeOrder,
+                defaultAreaUnit: areaUnit,
+            };
+            localStorage.setItem(`appSettings_${user.id}`, JSON.stringify(appSettings));
+            setSaved(true);
+        }
         setTimeout(() => setSaved(false), 2000);
     };
 

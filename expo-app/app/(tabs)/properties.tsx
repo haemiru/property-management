@@ -433,7 +433,16 @@ export default function PropertiesScreen() {
         setClients(clnts);
         setBrokerInfo(broker);
         setOrderedTypes(settings.propertyTypeOrder as PropertyType[]);
+        setOrderedTypes(settings.propertyTypeOrder as PropertyType[]);
         setDefaultAreaUnit(settings.defaultAreaUnit);
+
+        // Set default type if not already set or valid
+        if (settings.propertyTypeOrder && settings.propertyTypeOrder.length > 0) {
+            setNewProp(prev => ({
+                ...prev,
+                type: settings.propertyTypeOrder[0] as PropertyType
+            }));
+        }
     };
 
     const onRefresh = async () => {
@@ -592,7 +601,7 @@ export default function PropertiesScreen() {
         // await storage.setProperties(newProperties); // Removed
 
         setNewProp({
-            type: PropertyType.HOUSE,
+            type: orderedTypes[0] || PropertyType.HOUSE,
             transactionType: TransactionType.SALE,
             images: [],
             priceAmount: 0,
