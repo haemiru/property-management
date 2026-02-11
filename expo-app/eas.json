@@ -15,7 +15,11 @@
         },
         "production": {
             "android": {
-                "buildType": "app-bundle"
+                "buildType": "app-bundle",
+                "image": "ubuntu-22.04",
+                "env": {
+                    "GRADLE_OPTS": "-Xmx3g -Dorg.gradle.daemon=false"
+                }
             }
         }
     },

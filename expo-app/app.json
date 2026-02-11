@@ -43,16 +43,6 @@
     "plugins": [
       "expo-router",
       "expo-dev-client",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "minSdkVersion": 24
-          }
-        }
-      ],
       "expo-web-browser",
       "./plugins/withCallReceiver"
     ],
