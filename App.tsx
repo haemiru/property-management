@@ -6,6 +6,7 @@ import DashboardView from './views/DashboardView';
 import PropertyListView from './views/PropertyListView';
 import ClientListView from './views/ClientListView';
 import ScheduleView from './views/ScheduleView';
+import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { supabase } from './src/lib/supabase';
@@ -72,6 +73,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           >
             <Icons.Calendar />
             <span>일정 관리</span>
+          </NavLink>
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${isActive
+                ? 'bg-white text-indigo-700 shadow-lg font-semibold'
+                : 'text-indigo-100 hover:bg-indigo-600'
+              }`
+            }
+          >
+            <Icons.Settings />
+            <span>환경설정</span>
           </NavLink>
         </nav>
 
@@ -290,6 +303,7 @@ const AuthenticatedApp: React.FC = () => {
               />
             }
           />
+          <Route path="/settings" element={<SettingsView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

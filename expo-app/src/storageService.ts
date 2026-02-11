@@ -1,6 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Property, Client, ScheduleTask, BrokerInfo } from './types';
+import { Property, Client, ScheduleTask, BrokerInfo, PropertyType } from './types';
 import { supabase } from './lib/supabase';
+import { NativeModules, Platform } from 'react-native';
+
+// Sync client data to SharedPreferences for native CallReceiver access
+const syncClientsToNative = (clients: Client[]) => {
+    if (Platform.OS !== 'android') return;
+    try {
+        const { NativeStorageBridge } = NativeModules;
+        if (NativeStorageBridge) {
+            NativeStorageBridge.syncClients(JSON.stringify(clients));
+        }
+    } catch (e) {
+        console.error('Failed to sync clients to native:', e);
+    }
+};
 
 // Simple UUID generator to avoid native module dependencies
 const generateUUID = () => {
@@ -13,6 +27,7 @@ const generateUUID = () => {
 const KEYS = {
     BROKER_INFO: 'realtor_broker_info',
     CLIENTS_CACHE: 'realtor_clients_cache',
+    APP_SETTINGS: 'app_settings',
 };
 
 export const storage = {
@@ -69,7 +84,9 @@ export const storage = {
         const clients = (data || []) as any as Client[];
         // Update cache
         try {
-            await AsyncStorage.setItem(KEYS.CLIENTS_CACHE, JSON.stringify(clients));
+            const jsonStr = JSON.stringify(clients);
+            await AsyncStorage.setItem(KEYS.CLIENTS_CACHE, jsonStr);
+            syncClientsToNative(clients);
         } catch (e) {
             console.error('Failed to cache clients:', e);
         }
@@ -125,6 +142,7 @@ export const storage = {
             const cached = await this.getCachedClients();
             const updated = [savedClient, ...cached];
             await AsyncStorage.setItem(KEYS.CLIENTS_CACHE, JSON.stringify(updated));
+            syncClientsToNative(updated);
         } catch (e) {
             console.error('Failed to update client cache (add):', e);
         }
@@ -162,6 +180,7 @@ export const storage = {
             const updated = [clientWithTimestamp, ...otherClients];
 
             await AsyncStorage.setItem(KEYS.CLIENTS_CACHE, JSON.stringify(updated));
+            syncClientsToNative(updated);
         } catch (e) {
             console.error('Failed to update client cache (update):', e);
         }
@@ -179,6 +198,7 @@ export const storage = {
             const cached = await this.getCachedClients();
             const updated = cached.filter(c => c.id !== id);
             await AsyncStorage.setItem(KEYS.CLIENTS_CACHE, JSON.stringify(updated));
+            syncClientsToNative(updated);
         } catch (e) {
             console.error('Failed to update client cache (delete):', e);
         }
@@ -243,8 +263,36 @@ export const storage = {
     async updateLocalCache(clients: Client[]): Promise<void> {
         try {
             await AsyncStorage.setItem(KEYS.CLIENTS_CACHE, JSON.stringify(clients));
+            syncClientsToNative(clients);
         } catch (e) {
             console.error('Failed to manually update cache:', e);
         }
+    },
+
+    // APP SETTINGS
+    async getAppSettings(): Promise<{ propertyTypeOrder: string[]; defaultAreaUnit: 'py' | 'm2' }> {
+        try {
+            const data = await AsyncStorage.getItem(KEYS.APP_SETTINGS);
+            if (data) {
+                const parsed = JSON.parse(data);
+                const allTypes = Object.values(PropertyType);
+                const savedOrder: string[] = parsed.propertyTypeOrder || [];
+                const finalOrder = [
+                    ...savedOrder.filter((t: string) => allTypes.includes(t as PropertyType)),
+                    ...allTypes.filter(t => !savedOrder.includes(t)),
+                ];
+                return {
+                    propertyTypeOrder: finalOrder,
+                    defaultAreaUnit: parsed.defaultAreaUnit || 'py',
+                };
+            }
+        } catch (e) {
+            console.error('Failed to get app settings:', e);
+        }
+        return { propertyTypeOrder: Object.values(PropertyType), defaultAreaUnit: 'py' };
+    },
+
+    async setAppSettings(settings: { propertyTypeOrder: string[]; defaultAreaUnit: 'py' | 'm2' }): Promise<void> {
+        await AsyncStorage.setItem(KEYS.APP_SETTINGS, JSON.stringify(settings));
     }
 };

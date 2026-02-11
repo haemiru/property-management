@@ -78,10 +78,11 @@ interface AreaInputProps {
     valueM2?: number;
     onChangeM2: (val: number | undefined) => void;
     style?: any;
+    defaultUnit?: 'py' | 'm2';
 }
 
-const AreaInput = ({ valueM2, onChangeM2, style }: AreaInputProps) => {
-    const [unit, setUnit] = useState<'py' | 'm2'>('py');
+const AreaInput = ({ valueM2, onChangeM2, style, defaultUnit = 'py' }: AreaInputProps) => {
+    const [unit, setUnit] = useState<'py' | 'm2'>(defaultUnit);
 
     // displayValue logic: derived from valueM2 (source of truth) and current unit
     const displayValue = valueM2 !== undefined && valueM2 !== 0
@@ -146,6 +147,8 @@ export default function PropertiesScreen() {
     const [properties, setProperties] = useState<Property[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [brokerInfo, setBrokerInfo] = useState<BrokerInfo | null>(null);
+    const [orderedTypes, setOrderedTypes] = useState<PropertyType[]>(Object.values(PropertyType));
+    const [defaultAreaUnit, setDefaultAreaUnit] = useState<'py' | 'm2'>('py');
     const [isAdding, setIsAdding] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [refreshing, setRefreshing] = useState(false);
@@ -420,15 +423,17 @@ export default function PropertiesScreen() {
     );
 
     const loadData = async () => {
-        const [props, clnts, broker] = await Promise.all([
+        const [props, clnts, broker, settings] = await Promise.all([
             storage.getProperties(),
             storage.getClients(),
             storage.getBrokerInfo(),
+            storage.getAppSettings(),
         ]);
         setProperties(props);
         setClients(clnts);
         setBrokerInfo(broker);
-
+        setOrderedTypes(settings.propertyTypeOrder as PropertyType[]);
+        setDefaultAreaUnit(settings.defaultAreaUnit);
     };
 
     const onRefresh = async () => {
@@ -1361,7 +1366,7 @@ export default function PropertiesScreen() {
                                         </TouchableOpacity>
                                         {showTypeDropdown && (
                                             <View style={styles.dropdownList}>
-                                                {Object.values(PropertyType).map((type) => (
+                                                {orderedTypes.map((type) => (
                                                     <TouchableOpacity
                                                         key={type}
                                                         style={[
@@ -1369,7 +1374,7 @@ export default function PropertiesScreen() {
                                                             newProp.type === type && styles.dropdownItemActive
                                                         ]}
                                                         onPress={() => {
-                                                            setNewProp({ ...newProp, type });
+                                                            setNewProp({ ...newProp, type: type as PropertyType });
                                                             setShowTypeDropdown(false);
                                                         }}
                                                     >
@@ -1532,6 +1537,7 @@ export default function PropertiesScreen() {
                                                 style={styles.input}
                                                 valueM2={newProp.landArea}
                                                 onChangeM2={(val) => setNewProp({ ...newProp, landArea: val })}
+                                                defaultUnit={defaultAreaUnit}
                                             />
 
                                             <Text style={styles.sectionLabel}>건물 정보</Text>
@@ -1590,6 +1596,7 @@ export default function PropertiesScreen() {
                                                                 const updated = newProp.buildings!.map(b => b.id === building.id ? { ...b, area: val || 0 } : b);
                                                                 setNewProp({ ...newProp, buildings: updated });
                                                             }}
+                                                            defaultUnit={defaultAreaUnit}
                                                         />
 
                                                         <Text style={styles.label}>연면적</Text>
@@ -1600,6 +1607,7 @@ export default function PropertiesScreen() {
                                                                 const updated = newProp.buildings!.map(b => b.id === building.id ? { ...b, totalFloorArea: val || 0 } : b);
                                                                 setNewProp({ ...newProp, buildings: updated });
                                                             }}
+                                                            defaultUnit={defaultAreaUnit}
                                                         />
 
                                                         <Text style={styles.label}>건축물 용도</Text>
@@ -1991,11 +1999,11 @@ export default function PropertiesScreen() {
                             {/* 매물 구분 */}
                             <Text style={styles.label}>매물 구분</Text>
                             <View style={styles.filterWrap}>
-                                {Object.values(PropertyType).map(type => (
+                                {orderedTypes.map(type => (
                                     <TouchableOpacity
                                         key={type}
                                         style={[styles.filterChip, advancedFilters.type === type && styles.filterChipActive]}
-                                        onPress={() => setAdvancedFilters(resetFilters(type))}
+                                        onPress={() => setAdvancedFilters(resetFilters(type as PropertyType))}
                                     >
                                         <Text style={[styles.filterChipText, advancedFilters.type === type && styles.filterChipTextActive]}>{type}</Text>
                                     </TouchableOpacity>

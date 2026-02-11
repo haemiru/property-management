@@ -10,6 +10,7 @@ export default function HomeScreen() {
     const [properties, setProperties] = useState<Property[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [tasks, setTasks] = useState<ScheduleTask[]>([]);
+    const [currentTime, setCurrentTime] = useState(new Date());
 
     // Settings
     const [showSettings, setShowSettings] = useState(false);
@@ -19,6 +20,11 @@ export default function HomeScreen() {
             loadData();
         }, [])
     );
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     const loadData = async () => {
         const [props, clnts, tsks] = await Promise.all([
@@ -31,16 +37,31 @@ export default function HomeScreen() {
         setTasks(tsks);
     };
 
-    const now = new Date();
+    const now = currentTime;
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const todayTasks = tasks.filter(t => !t.completed && t.date === today);
     const recentProperties = properties.slice(0, 3);
+
+    const DAYS_KO = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+    const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
+    const dayStr = DAYS_KO[now.getDay()];
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     return (
         <View style={{ flex: 1 }}>
             <ScrollView style={styles.container}>
                 <View style={styles.content}>
 
+                    {/* Date & Time Banner */}
+                    <View style={styles.dateTimeBanner}>
+                        <View style={styles.dateTimeLeft}>
+                            <Text style={styles.dateText}>{dateStr}</Text>
+                            <Text style={styles.dayText}>{dayStr}</Text>
+                        </View>
+                        <View style={styles.dateTimeRight}>
+                            <Text style={styles.timeText}>{timeStr}</Text>
+                        </View>
+                    </View>
 
                     {/* Stats */}
                     <View style={styles.statsRow}>
@@ -144,6 +165,41 @@ const styles = StyleSheet.create({
     },
     content: {
         padding: 16,
+    },
+    dateTimeBanner: {
+        backgroundColor: '#6366f1',
+        padding: 20,
+        borderRadius: 16,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        shadowColor: '#6366f1',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    dateTimeLeft: {},
+    dateTimeRight: {
+        alignItems: 'flex-end',
+    },
+    dateText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: 'rgba(255,255,255,0.8)',
+    },
+    dayText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#ffffff',
+        marginTop: 2,
+    },
+    timeText: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#ffffff',
+        fontVariant: ['tabular-nums'],
     },
     statsRow: {
         flexDirection: 'row',

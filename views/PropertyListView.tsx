@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Property, PropertyType, TransactionType, Client, LAND_USE_ZONES, LAND_CATEGORIES, BUILDING_USES, BuildingDetail } from '../types';
 import { Icons } from '../constants';
+import { getAppSettings } from './SettingsView';
 import { generatePropertyDescription } from '../services/geminiService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -20,10 +21,11 @@ interface AreaInputProps {
   label: string;
   valueM2?: number;
   onChangeM2: (val: number | undefined) => void;
+  defaultUnit?: 'py' | 'm2';
 }
 
-const AreaInput: React.FC<AreaInputProps> = ({ label, valueM2, onChangeM2 }) => {
-  const [unit, setUnit] = useState<'py' | 'm2'>('py');
+const AreaInput: React.FC<AreaInputProps> = ({ label, valueM2, onChangeM2, defaultUnit = 'py' }) => {
+  const [unit, setUnit] = useState<'py' | 'm2'>(defaultUnit);
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
@@ -108,6 +110,10 @@ interface PropertyListViewProps {
 const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients, onAdd, onUpdate, onDelete }) => {
   const location = useLocation();
   const [isAdding, setIsAdding] = useState(false);
+
+  // Load app settings
+  const appSettings = useMemo(() => getAppSettings(), []);
+  const orderedTypes = appSettings.propertyTypeOrder as PropertyType[];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
@@ -628,7 +634,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                   onChange={(e) => setFilterType(e.target.value as any)}
                 >
                   <option value="전체">전체 구분</option>
-                  {Object.values(PropertyType).map(t => <option key={t} value={t}>{t}</option>)}
+                  {orderedTypes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
@@ -744,7 +750,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                     value={newProp.type}
                     onChange={e => setNewProp({ ...newProp, type: e.target.value as PropertyType })}
                   >
-                    {Object.values(PropertyType).map(type => <option key={type} value={type}>{type}</option>)}
+                    {orderedTypes.map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -890,6 +896,7 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                       label="대지면적"
                       valueM2={newProp.landArea}
                       onChangeM2={(val) => setNewProp({ ...newProp, landArea: val })}
+                      defaultUnit={appSettings.defaultAreaUnit}
                     />
                   </div>
 
@@ -944,8 +951,8 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
                               onChange={e => setNewBuilding({ ...newBuilding, floor: parseInt(e.target.value) || undefined })}
                             />
                           </div>
-                          <AreaInput label="건평" valueM2={newBuilding.area} onChangeM2={v => setNewBuilding({ ...newBuilding, area: v || 0 })} />
-                          <AreaInput label="연면적" valueM2={newBuilding.totalFloorArea} onChangeM2={v => setNewBuilding({ ...newBuilding, totalFloorArea: v || 0 })} />
+                          <AreaInput label="건평" valueM2={newBuilding.area} onChangeM2={v => setNewBuilding({ ...newBuilding, area: v || 0 })} defaultUnit={appSettings.defaultAreaUnit} />
+                          <AreaInput label="연면적" valueM2={newBuilding.totalFloorArea} onChangeM2={v => setNewBuilding({ ...newBuilding, totalFloorArea: v || 0 })} defaultUnit={appSettings.defaultAreaUnit} />
 
                           <select
                             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"

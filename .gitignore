@@ -34,6 +34,8 @@ check_columns.cjs
 check_columns.js
 expo-app/debug_*.js
 expo-app/debug_*.ts
+expo-app/build_log*.txt
+expo-app/build_output*.txt
 
 # Android build artifacts
 expo-app/android/.gradle

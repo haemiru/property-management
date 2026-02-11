@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property, Client, ScheduleTask } from '../types';
 import { Icons } from '../constants';
@@ -9,18 +9,43 @@ interface DashboardViewProps {
   tasks: ScheduleTask[];
 }
 
+const DAYS_KO = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+
 const DashboardView: React.FC<DashboardViewProps> = ({ properties, clients, tasks }) => {
   const navigate = useNavigate();
+  const [currentTime, setCurrentTime] = useState(new Date());
   const pendingTasks = tasks.filter(t => !t.completed);
   const recentProperties = properties.slice(0, 3);
-  const now = new Date();
+  const now = currentTime;
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handlePropertyClick = (id: string) => {
     navigate('/properties', { state: { selectedId: id } });
   };
 
+  const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
+  const dayStr = DAYS_KO[now.getDay()];
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
   return (
     <div className="p-4 space-y-6">
+      {/* Date & Time Banner */}
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-5 rounded-2xl text-white shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium opacity-80">{dateStr}</p>
+            <p className="text-xl font-bold mt-0.5">{dayStr}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-bold tabular-nums tracking-wide">{timeStr}</p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex flex-col items-center">
           <span className="text-3xl font-bold text-indigo-600">{properties.length}</span>

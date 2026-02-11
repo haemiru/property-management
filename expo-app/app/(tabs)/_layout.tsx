@@ -2,9 +2,37 @@ import { Tabs } from 'expo-router';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { View, Text, TouchableOpacity, Alert } from 'react-native';
 
 export default function TabLayout() {
     const insets = useSafeAreaInsets();
+    const { signOut, user } = useAuth();
+
+    const headerRight = () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12, gap: 8 }}>
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', maxWidth: 120 }} numberOfLines={1}>
+                {user?.email || ''}
+            </Text>
+            <TouchableOpacity
+                onPress={() => {
+                    Alert.alert('로그아웃', '정말 로그아웃 하시겠습니까?', [
+                        { text: '취소', style: 'cancel' },
+                        { text: '로그아웃', style: 'destructive', onPress: signOut },
+                    ]);
+                }}
+                style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.4)',
+                }}
+            >
+                <Text style={{ fontSize: 11, color: '#ffffff', fontWeight: '600' }}>로그아웃</Text>
+            </TouchableOpacity>
+        </View>
+    );
 
     return (
         <Tabs
@@ -26,6 +54,7 @@ export default function TabLayout() {
                 headerTitleStyle: {
                     fontWeight: 'bold',
                 },
+                headerRight,
             }}
         >
             <Tabs.Screen

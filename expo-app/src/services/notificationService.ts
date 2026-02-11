@@ -37,14 +37,14 @@ export const displayIncomingCallNotification = async (customerName: string, note
             inboxLines.push('🕒 이력 없음');
         }
 
-        if (notes) {
-            inboxLines.push(`📝 메모: ${notes}`);
-        }
 
-        // Body text for collapsed view - show recent history summary
-        const bodyText = callHistory && callHistory.trim()
-            ? `🕒 이력 ${callHistory.split(/\r?\n/).filter((l: string) => l.trim()).length}건 | ${notes ? '📝 ' + notes : ''}`
-            : notes ? `📝 메모: ${notes}` : '정보 없음';
+        // Body text for collapsed view - show the most recent history line
+        const firstHistoryLine = callHistory && callHistory.trim()
+            ? callHistory.split(/\r?\n/).filter((l: string) => l.trim())[0]
+            : null;
+        const bodyText = firstHistoryLine
+            ? `🕒 ${firstHistoryLine}`
+            : '이력 없음';
 
         console.log(`[NotificationService] Updating notification for ${customerName} (ID: incoming-call-notification)`);
         console.log('[NotificationService] InboxStyle lines:', JSON.stringify(inboxLines));
