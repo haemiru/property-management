@@ -53,7 +53,8 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withCallReceiver"
     ],
     "extra": {
       "router": {},
