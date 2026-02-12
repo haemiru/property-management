@@ -16,7 +16,7 @@
         "production": {
             "android": {
                 "buildType": "app-bundle",
-                "image": "ubuntu-22.04",
+                "image": "latest",
                 "env": {
                     "GRADLE_OPTS": "-Xmx3g -Dorg.gradle.daemon=false"
                 }
