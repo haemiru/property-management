@@ -33,7 +33,7 @@ public class CallReceiver extends BroadcastReceiver {
         }
 
         Log.d(TAG, "State: " + stateStr + ", Number: " + phoneNumber +
-                ", LastNumber: " + lastPhoneNumber + ", Foreground: " + isAppInForeground(context));
+                ", LastNumber: " + lastPhoneNumber);
 
         if (TelephonyManager.EXTRA_STATE_RINGING.equals(stateStr)) {
             wasRinging = true;
