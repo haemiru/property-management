@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { useEffect } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import { Colors } from '../src/constants';
-import { startCallListener, stopCallListener } from '../src/services/callDetection';
+// Removed unused imports: startCallListener, stopCallListener
 
 function RootLayoutNav() {
     const { session, loading } = useAuth();
@@ -44,22 +44,8 @@ export default function RootLayout() {
         <AuthProvider>
             <StatusBar style="dark" />
             <RootLayoutNav />
-            <CallListenerEffect />
         </AuthProvider>
     );
 }
 
-// Global listener setup (optional) or inside the component
-// Better inside a component to handle lifecycle
-import { registerCallDetectionModule } from '../src/fixCallDetection';
 
-export function CallListenerEffect() {
-    useEffect(() => {
-        registerCallDetectionModule(); // Register the module fix
-        startCallListener();
-        return () => {
-            stopCallListener();
-        };
-    }, []);
-    return null;
-}

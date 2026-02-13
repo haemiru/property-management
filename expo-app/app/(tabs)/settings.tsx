@@ -225,6 +225,20 @@ export default function SettingsScreen() {
                         <Text style={styles.saveButtonText}>알림 테스트 (5초 후 발생)</Text>
                     </TouchableOpacity>
 
+                    {/* --- 소개 페이지 (녹화용) --- */}
+                    <TouchableOpacity
+                        style={[styles.saveButton, { backgroundColor: Colors.purple, marginTop: 12 }]}
+                        onPress={() => {
+                            // @ts-ignore
+                            router.push('/intro');
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Icons.Camera size={20} color="white" />
+                            <Text style={styles.saveButtonText}>소개 페이지 보기 (녹화용)</Text>
+                        </View>
+                    </TouchableOpacity>
+
                     {/* --- 로그아웃 --- */}
                     <View style={[styles.sectionCard, { marginTop: 16 }]}>
                         <Text style={styles.sectionTitle}>계정</Text>

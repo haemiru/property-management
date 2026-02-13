@@ -47,10 +47,9 @@ public class CallReceiver extends BroadcastReceiver {
         if (TelephonyManager.EXTRA_STATE_RINGING.equals(stateStr)) {
             wasRinging = true;
 
-            if (isAppInForeground(context)) {
-                Log.d(TAG, "App is in foreground, skipping native notification (JS will handle)");
-                return;
-            }
+            // Foreground check removed (JS listener is gone)
+            // Always show native notification if number is known
+            // if (isAppInForeground(context)) { ... }
 
             if (lastPhoneNumber != null && !lastPhoneNumber.isEmpty()) {
                 Log.d(TAG, "Incoming call from: " + lastPhoneNumber + " → showing native notification");
@@ -75,26 +74,7 @@ public class CallReceiver extends BroadcastReceiver {
         }
     }
 
-    private boolean isAppInForeground(Context context) {
-        try {
-            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-            if (am == null) return false;
-
-            List<ActivityManager.RunningAppProcessInfo> processes = am.getRunningAppProcesses();
-            if (processes == null) return false;
-
-            String packageName = context.getPackageName();
-            for (ActivityManager.RunningAppProcessInfo process : processes) {
-                if (process.processName.equals(packageName) &&
-                        process.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
-                    return true;
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error checking foreground state", e);
-        }
-        return false;
-    }
+    // isAppInForeground method removed as it is no longer used
 }
 `;
 
