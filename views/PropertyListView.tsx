@@ -302,19 +302,50 @@ const PropertyListView: React.FC<PropertyListViewProps> = ({ properties, clients
     document.body.removeChild(link);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  /* 
+   * Image Upload Handler (Modified to upload to Supabase Storage)
+   */
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files) {
-      Array.from(files).forEach((file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setNewProp(prev => ({
-            ...prev,
-            images: [...(prev.images || []), reader.result as string]
-          }));
-        };
-        reader.readAsDataURL(file);
-      });
+    if (files && files.length > 0) {
+      if (!user) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      const uploadedUrls: string[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from('property-images')
+            .upload(fileName, file);
+
+          if (uploadError) {
+            console.error('Upload Error:', uploadError);
+            alert(`이미지 업로드 실패: ${file.name}`);
+            continue;
+          }
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('property-images')
+            .getPublicUrl(fileName);
+
+          uploadedUrls.push(publicUrl);
+        } catch (err) {
+          console.error('Unexpected Upload Error:', err);
+          alert('이미지 업로드 중 오류가 발생했습니다.');
+        }
+      }
+
+      setNewProp(prev => ({
+        ...prev,
+        images: [...(prev.images || []), ...uploadedUrls]
+      }));
     }
   };
 
