@@ -1,0 +1,7 @@
+expo-app/
+node_modules/
+.git/
+.vscode/
+dist/
+*.aab
+*.apk

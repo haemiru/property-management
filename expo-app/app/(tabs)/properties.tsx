@@ -28,6 +28,7 @@ import { geminiService } from '../../src/services/geminiService';
 import * as SMS from 'expo-sms';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import PropertyDetail from '../../src/components/PropertyDetail';
+import PropertyShareModal from '../../src/components/PropertyShareModal';
 
 interface DecimalInputProps extends Omit<React.ComponentProps<typeof TextInput>, 'value' | 'onChange'> {
     value?: number;
@@ -143,6 +144,7 @@ const AreaInput = ({ valueM2, onChangeM2, style, defaultUnit = 'py' }: AreaInput
     );
 };
 
+
 export default function PropertiesScreen() {
     const [properties, setProperties] = useState<Property[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -152,10 +154,8 @@ export default function PropertiesScreen() {
     const [isAdding, setIsAdding] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [refreshing, setRefreshing] = useState(false);
-    const [showReportPreview, setShowReportPreview] = useState(false);
-    const [selectedClientForShare, setSelectedClientForShare] = useState<Client | null>(null);
+    const [showShareModal, setShowShareModal] = useState(false);
     const [isReadOnly, setIsReadOnly] = useState(false);
-    const reportRef = useRef<View>(null);
     const params = useLocalSearchParams();
 
     // Reset state on tab blur
@@ -167,7 +167,8 @@ export default function PropertiesScreen() {
                 setIsReadOnly(false);
                 setIsAdding(false);
                 setShowAdvancedSearch(false);
-                setShowReportPreview(false);
+                setShowShareModal(false);
+
             };
         }, [])
     );
@@ -274,16 +275,14 @@ export default function PropertiesScreen() {
         }
     }, [newProp.type]);
 
-    const [reportImages, setReportImages] = useState<string[]>([]);
-    const [showImageSelector, setShowImageSelector] = useState(false);
-
-
     const addBuilding = () => {
         if (!newBuilding.name) {
             Alert.alert('알림', '건물 명칭을 입력해주세요.');
             return;
         }
-        const buildingToAdd = { ...newBuilding, id: Date.now().toString() };
+        const buildingToAdd = {
+            ...newBuilding, id: Date.now().toString()
+        };
         const updated = [...(newProp.buildings || []), buildingToAdd];
         setNewProp({ ...newProp, buildings: updated });
 
@@ -302,10 +301,12 @@ export default function PropertiesScreen() {
         });
     };
 
+
     const removeBuilding = (id: string) => {
         const updated = (newProp.buildings || []).filter(b => b.id !== id);
         setNewProp({ ...newProp, buildings: updated });
     };
+
 
     const isBuildingValid = newBuilding.name.trim().length > 0;
 
@@ -328,74 +329,12 @@ export default function PropertiesScreen() {
                 return false;
             };
 
+
             const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
             return () => subscription.remove();
         }, [selectedProperty, isAdding, showAdvancedSearch])
     );
 
-    const renderImageSelector = () => {
-        if (!showImageSelector || !selectedProperty) return null;
-
-        const toggleImageSelection = (uri: string) => {
-            setReportImages(prev => {
-                if (prev.includes(uri)) {
-                    return prev.filter(img => img !== uri);
-                } else {
-                    if (prev.length >= 3) {
-                        Alert.alert('알림', '최대 3장까지 선택할 수 있습니다.');
-                        return prev;
-                    }
-                    return [...prev, uri];
-                }
-            });
-        };
-
-        const sortedImages = [...(selectedProperty.images || [])];
-
-        return (
-            <Modal
-                visible={showImageSelector}
-                animationType="slide"
-                onRequestClose={() => setShowImageSelector(false)}
-            >
-                <SafeAreaView style={styles.modalContainer}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>매물장 이미지 선택 (최대 3장)</Text>
-                        <TouchableOpacity onPress={() => setShowImageSelector(false)}>
-                            <Text style={{ fontSize: 16, color: Colors.slate500 }}>닫기</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.modalContent}>
-                        <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                            {sortedImages.map((item) => {
-                                const selectedIdx = reportImages.indexOf(item);
-                                const isSelected = selectedIdx !== -1;
-                                return (
-                                    <TouchableOpacity key={item} onPress={() => toggleImageSelection(item)} style={{ width: '31%', aspectRatio: 1, position: 'relative' }}>
-                                        <Image source={{ uri: item }} style={{ width: '100%', height: '100%', borderRadius: 8, opacity: isSelected ? 0.5 : 1 }} />
-                                        {isSelected && (
-                                            <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: Colors.primary, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                                                <Text style={{ color: 'white', fontWeight: 'bold' }}>{selectedIdx + 1}</Text>
-                                            </View>
-                                        )}
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                        <TouchableOpacity
-                            style={[styles.submitButton, { marginTop: 20 }]}
-                            onPress={() => {
-                                setShowImageSelector(false);
-                                setShowReportPreview(true);
-                            }}
-                        >
-                            <Text style={styles.submitButtonText}>선택 완료 ({reportImages.length}/3)</Text>
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
-            </Modal>
-        );
-    };
     const [showDatePicker, setShowDatePicker] = useState(false);
 
     const resetFilters = (type: PropertyType) => ({
@@ -433,7 +372,7 @@ export default function PropertiesScreen() {
         setClients(clnts);
         setBrokerInfo(broker);
         setOrderedTypes(settings.propertyTypeOrder as PropertyType[]);
-        setOrderedTypes(settings.propertyTypeOrder as PropertyType[]);
+
         setDefaultAreaUnit(settings.defaultAreaUnit);
 
         // Set default type if not already set or valid
@@ -445,11 +384,13 @@ export default function PropertiesScreen() {
         }
     };
 
+
     const onRefresh = async () => {
         setRefreshing(true);
         await loadData();
         setRefreshing(false);
     };
+
 
     // Media picker functions are called directly from buttons
 
@@ -468,6 +409,7 @@ export default function PropertiesScreen() {
             }));
         }
     };
+
 
     const handleTakePhoto = async () => {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -489,6 +431,7 @@ export default function PropertiesScreen() {
         }
     };
 
+
     const handleTakeVideo = async () => {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
@@ -509,6 +452,7 @@ export default function PropertiesScreen() {
             }));
         }
     };
+
 
     const handleGenerateAI = async () => {
         if (!newProp.title && !newProp.type && !newProp.address) {
@@ -546,6 +490,7 @@ export default function PropertiesScreen() {
             setIsGeneratingAI(false);
         }
     };
+
 
     const handleSubmit = async () => {
         if (!newProp.title) {
@@ -587,6 +532,7 @@ export default function PropertiesScreen() {
                 buildings: newProp.buildings,
             };
 
+
             console.log("Submitting property:", property);
 
             if (isUpdate) {
@@ -611,11 +557,12 @@ export default function PropertiesScreen() {
             });
             setIsAdding(false);
             Alert.alert('완료', isUpdate ? '매물이 수정되었습니다.' : '매물이 등록되었습니다.');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error submitting property:", error);
-            Alert.alert('오류', '매물 저장 중 오류가 발생했습니다.');
+            Alert.alert('오류', '매물 저장 중 오류가 발생했습니다.\n' + (error.message || JSON.stringify(error)));
         }
     };
+
 
     const handleDelete = async (id: string) => {
         Alert.alert('삭제 확인', '정말로 이 매물을 삭제하시겠습니까?', [
@@ -675,526 +622,6 @@ export default function PropertiesScreen() {
             matchesBuildingUse && matchesMinAreaPyeong && matchesMaxAreaPyeong;
     });
 
-    const [isSharing, setIsSharing] = useState(false);
-
-    const handleShareImage = async () => {
-        if (isSharing) return;
-        setIsSharing(true);
-        try {
-            // Wait for view to be fully rendered
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const uri = await captureRef(reportRef, {
-                format: 'png',
-                quality: 0.9,
-            });
-            await Sharing.shareAsync(uri);
-        } catch (error) {
-            console.error('Image capture error:', error);
-            Alert.alert('오류', '이미지 생성 중 오류가 발생했습니다.');
-        } finally {
-            setIsSharing(false);
-        }
-    };
-
-    const handleSendSMS = async () => {
-        if (!selectedClientForShare) {
-            Alert.alert('알림', '전송할 고객을 선택해주세요.');
-            return;
-        }
-
-        if (isSharing) return;
-        setIsSharing(true);
-
-        try {
-            // Wait for view to be fully rendered
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const uri = await captureRef(reportRef, {
-                format: 'png',
-                quality: 0.9,
-            });
-
-            // On Android, SMS with file attachments often fails due to FileProvider issues
-            // So we go directly to the share sheet where user can pick SMS app
-            if (Platform.OS === 'android') {
-                Alert.alert(
-                    '매물장 전송',
-                    `${selectedClientForShare.name} 고객에게 전송합니다.\n\n이미지가 생성되면 공유 화면에서 '메시지' 또는 '카카오톡'을 선택해주세요.`,
-                    [{ text: '공유하기', onPress: () => Sharing.shareAsync(uri) }]
-                );
-            } else {
-                // iOS - try SMS with attachment
-                const isAvailable = await SMS.isAvailableAsync();
-                if (isAvailable) {
-                    await SMS.sendSMSAsync(
-                        [selectedClientForShare.phone],
-                        '매물장 전달드립니다.',
-                        {
-                            attachments: [{
-                                uri: uri,
-                                mimeType: 'image/png',
-                                filename: 'property_report.png',
-                            }],
-                        }
-                    );
-                } else {
-                    await Sharing.shareAsync(uri);
-                }
-            }
-        } catch (error) {
-            console.error('Image send error:', error);
-            Alert.alert('오류', '이미지 전송 중 오류가 발생했습니다.\n다시 시도해주세요.');
-        } finally {
-            setIsSharing(false);
-        }
-    };
-
-    // Helper function to get header color based on property type and transaction type
-    const getHeaderColor = () => {
-        if (!selectedProperty) return '#0066cc';
-        // 토지는 녹색
-        if (selectedProperty.type === PropertyType.LAND) return '#10b981';
-        // 매매는 주황색
-        if (selectedProperty.transactionType === TransactionType.SALE) return '#f97316';
-        // 임대(월세, 전세)는 파란색
-        return '#0066cc';
-    };
-
-    // Helper function to convert m² to 평
-    const sqmToPyeong = (sqm: number) => Math.round(sqm * 0.3025 * 100) / 100;
-
-    // Report Preview View - Template Style
-    const renderReportPreview = () => {
-        if (!selectedProperty) return null;
-
-        const headerColor = getHeaderColor();
-        const isRental = selectedProperty.transactionType !== TransactionType.SALE;
-        const transactionLabel = selectedProperty.type === PropertyType.LAND ? '토지' :
-            selectedProperty.transactionType === TransactionType.SALE ? '매매' : '임대';
-
-        // Parse description into bullet points
-        const descriptionPoints = selectedProperty.description
-            ? selectedProperty.description.split('\n').filter(line => line.trim())
-            : [];
-
-        return (
-            <Modal
-                visible={showReportPreview}
-                animationType="slide"
-                onRequestClose={() => setShowReportPreview(false)}
-            >
-                <SafeAreaView style={{ flex: 1, backgroundColor: Colors.slate50 }}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>매물장 미리보기</Text>
-                        <TouchableOpacity onPress={() => setShowReportPreview(false)}>
-                            <Text style={styles.modalClose}>닫기</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, alignItems: 'center' }}>
-                        <View
-                            ref={reportRef}
-                            style={{
-                                backgroundColor: 'white',
-                                width: '100%',
-                                maxWidth: 600,
-                                borderWidth: 1,
-                                borderColor: Colors.slate300,
-                            }}
-                            collapsable={false}
-                        >
-                            {/* Header Bar - 거래유형별 색상 */}
-                            <View style={{
-                                backgroundColor: headerColor,
-                                paddingHorizontal: 16,
-                                paddingVertical: 12,
-                                flexDirection: 'row',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                            }}>
-                                <Text style={{
-                                    color: 'white',
-                                    fontSize: 18,
-                                    fontWeight: 'bold',
-                                    flex: 1,
-                                }} numberOfLines={1}>
-                                    {selectedProperty.title}
-                                </Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <View style={{
-                                        backgroundColor: 'white',
-                                        paddingHorizontal: 10,
-                                        paddingVertical: 4,
-                                        borderRadius: 4,
-                                    }}>
-                                        <Text style={{ color: headerColor, fontWeight: 'bold', fontSize: 13 }}>
-                                            {transactionLabel}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <Text style={{ color: 'white', fontSize: 12 }}>
-                                    관리번호 {selectedProperty.managementId || selectedProperty.id.slice(-4)}
-                                </Text>
-                            </View>
-
-
-                            {/* Image Section - 3 Photos */}
-                            <View style={{
-                                flexDirection: 'row',
-                                backgroundColor: '#f5f5f5',
-                                borderBottomWidth: 1,
-                                borderBottomColor: Colors.slate300,
-                            }}>
-                                {[0, 1, 2].map((index) => (
-                                    <View key={index} style={{ flex: 1, aspectRatio: 4 / 3 }}>
-                                        {reportImages && reportImages[index] ? (
-                                            <View style={{ flex: 1 }}>
-                                                <Image
-                                                    source={{ uri: reportImages[index] }}
-                                                    style={{ width: '100%', height: '100%' }}
-                                                    resizeMode="cover"
-                                                />
-                                                <View style={{
-                                                    position: 'absolute',
-                                                    bottom: 0,
-                                                    left: 0,
-                                                    right: 0,
-                                                    backgroundColor: 'rgba(0,0,0,0.6)',
-                                                    paddingVertical: 4,
-                                                }}>
-                                                    <Text style={{
-                                                        color: '#ffcc00',
-                                                        fontSize: 10,
-                                                        textAlign: 'center',
-                                                        fontWeight: 'bold',
-                                                    }}>
-                                                        {index === 0 ? '<외부 전경>' : index === 1 ? '<내부 전경>' : '<상세 사진>'}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                        ) : (
-                                            <View style={{
-                                                flex: 1,
-                                                backgroundColor: Colors.slate200,
-                                                justifyContent: 'center',
-                                                alignItems: 'center',
-                                            }}>
-                                                <Icons.Building size={32} color={Colors.slate400} />
-                                                <Text style={{ fontSize: 10, color: Colors.slate400, marginTop: 4 }}>
-                                                    사진 {index + 1}
-                                                </Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                ))}
-                            </View>
-
-                            {/* Content Section - Vertical Layout for Mobile */}
-                            <View style={{
-                                padding: 16,
-                                backgroundColor: 'white',
-                            }}>
-                                {/* 1. Property Info Grid */}
-                                <View style={{ borderWidth: 1, borderColor: Colors.slate300, marginBottom: 16 }}>
-                                    {/* Row 1: Address (Full Width) */}
-                                    <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.slate200 }}>
-                                        <View style={{ width: 80, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>소재지</Text>
-                                        </View>
-                                        <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                            <Text style={{ fontSize: 11, color: headerColor }}>{selectedProperty.address || '-'}</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Row 2: Building Use (Full Width) */}
-                                    {selectedProperty.buildingUse && (
-                                        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.slate200 }}>
-                                            <View style={{ width: 80, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>건축물용도</Text>
-                                            </View>
-                                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, color: Colors.slate700 }}>
-                                                    {selectedProperty.buildingUse} {selectedProperty.buildingUseDetail ? `(${selectedProperty.buildingUseDetail})` : ''}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    )}
-
-                                    {/* Row 3: Land Area & Building Area (2 Columns) */}
-                                    <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.slate200 }}>
-                                        {/* Left: Land */}
-                                        <View style={{ flex: 1, flexDirection: 'row', borderRightWidth: 1, borderRightColor: Colors.slate200 }}>
-                                            <View style={{ width: 60, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>대지면적</Text>
-                                            </View>
-                                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, color: Colors.slate700 }}>
-                                                    {selectedProperty.landArea ? `${sqmToPyeong(selectedProperty.landArea)}평` : '-'}
-                                                </Text>
-                                                <Text style={{ fontSize: 9, color: Colors.slate400 }}>
-                                                    {selectedProperty.landArea ? `(${selectedProperty.landArea}m²)` : ''}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        {/* Right: Building */}
-                                        <View style={{ flex: 1, flexDirection: 'row' }}>
-                                            <View style={{ width: 60, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>연면적</Text>
-                                            </View>
-                                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, color: Colors.slate700 }}>
-                                                    {selectedProperty.buildingArea ? `${sqmToPyeong(selectedProperty.buildingArea)}평` : '-'}
-                                                </Text>
-                                                <Text style={{ fontSize: 9, color: Colors.slate400 }}>
-                                                    {selectedProperty.buildingArea ? `(${selectedProperty.buildingArea}m²)` : ''}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Building List (Full Width if exists) */}
-                                    {selectedProperty.buildings && selectedProperty.buildings.length > 0 && (
-                                        <View style={{ borderBottomWidth: 1, borderBottomColor: Colors.slate200 }}>
-                                            <View style={{ backgroundColor: Colors.slate100, padding: 8 }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>건축물 상세 정보</Text>
-                                            </View>
-                                            <View>
-                                                {selectedProperty.buildings.map((b, idx) => (
-                                                    <View key={idx} style={{ padding: 8, borderBottomWidth: idx < selectedProperty.buildings!.length - 1 ? 1 : 0, borderBottomColor: Colors.slate100 }}>
-                                                        <View style={{ flexDirection: 'row', marginBottom: 4, alignItems: 'center' }}>
-                                                            <View style={{ backgroundColor: Colors.slate100, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginRight: 6 }}>
-                                                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: Colors.slate700 }}>{b.name || '건물'}</Text>
-                                                            </View>
-                                                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate800 }}>{b.use}</Text>
-                                                            {b.specificUse ? <Text style={{ fontSize: 11, color: Colors.slate600 }}> ({b.specificUse})</Text> : null}
-                                                        </View>
-
-                                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 4 }}>
-                                                            <Text style={{ fontSize: 10, color: Colors.slate600 }}>건축면적: {b.area}m²</Text>
-                                                            {b.totalFloorArea ? <Text style={{ fontSize: 10, color: Colors.slate600 }}>연면적: {b.totalFloorArea}m²</Text> : null}
-                                                        </View>
-
-                                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                                                            {b.structureHeight ? <Text style={{ fontSize: 10, color: Colors.slate600 }}>{b.structureHeight}</Text> : null}
-                                                            {b.usageApprovalDate ? <Text style={{ fontSize: 10, color: Colors.slate600 }}>사용승인: {b.usageApprovalDate}</Text> : null}
-                                                        </View>
-
-                                                        {b.note ? (
-                                                            <Text style={{ fontSize: 10, color: Colors.slate500, marginTop: 4 }}>비고: {b.note}</Text>
-                                                        ) : null}
-                                                    </View>
-                                                ))}
-                                            </View>
-                                        </View>
-                                    )}
-
-                                    {/* Row 4: Land Zone & Road (2 Columns) */}
-                                    <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.slate200 }}>
-                                        <View style={{ flex: 1, flexDirection: 'row', borderRightWidth: 1, borderRightColor: Colors.slate200 }}>
-                                            <View style={{ width: 60, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>용도지역</Text>
-                                            </View>
-                                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, color: Colors.slate700 }}>{selectedProperty.landUseZone || '-'}</Text>
-                                            </View>
-                                        </View>
-                                        <View style={{ flex: 1, flexDirection: 'row' }}>
-                                            <View style={{ width: 60, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>도로조건</Text>
-                                            </View>
-                                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, color: Colors.slate700 }}>{selectedProperty.roadCondition || '-'}</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Row 5: Structure/Height(Full) or Split? keep Split for specific fields */}
-                                    <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.slate200 }}>
-                                        <View style={{ flex: 1, flexDirection: 'row', borderRightWidth: 1, borderRightColor: Colors.slate200 }}>
-                                            <View style={{ width: 60, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>구조/층고</Text>
-                                            </View>
-                                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 10, color: Colors.slate700 }} numberOfLines={2}>{selectedProperty.structureHeight || '-'}</Text>
-                                            </View>
-                                        </View>
-                                        <View style={{ flex: 1, flexDirection: 'row' }}>
-                                            <View style={{ width: 60, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>사용승인</Text>
-                                            </View>
-                                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 11, color: Colors.slate700 }}>{selectedProperty.usageApprovalDate || '-'}</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Row 6: Infrastructure (Water/Sewage) (Full Width) */}
-                                    <View style={{ flexDirection: 'row' }}>
-                                        <View style={{ width: 80, backgroundColor: Colors.slate100, padding: 8, justifyContent: 'center' }}>
-                                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.slate700 }}>기타시설</Text>
-                                        </View>
-                                        <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                            <Text style={{ fontSize: 11, color: Colors.slate700 }}>
-                                                {[
-                                                    selectedProperty.water?.length ? `상수도(${selectedProperty.water.join(',')})` : '',
-                                                    selectedProperty.sewage?.length ? `하수(${selectedProperty.sewage.join(',')})` : ''
-                                                ].filter(Boolean).join(' / ') || '-'}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </View>
-
-                                {/* 2. Price Section */}
-                                <View style={{ alignItems: 'center', marginBottom: 24 }}>
-                                    <View style={{
-                                        backgroundColor: headerColor,
-                                        paddingHorizontal: 24,
-                                        paddingVertical: 8,
-                                        borderRadius: 20,
-                                        marginBottom: 12,
-                                    }}>
-                                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
-                                            {transactionLabel}
-                                        </Text>
-                                    </View>
-                                    <Text style={{ fontSize: 28, fontWeight: 'bold', color: Colors.slate900, marginBottom: 8 }}>
-                                        {selectedProperty.price}
-                                    </Text>
-                                    {selectedProperty.deposit && selectedProperty.monthlyRent && (
-                                        <Text style={{ fontSize: 16, color: Colors.slate600, marginBottom: 4 }}>
-                                            (보증금 {(selectedProperty.deposit / 10000).toLocaleString()}억원 / 월 {(selectedProperty.monthlyRent / 10).toLocaleString()}만원)
-                                        </Text>
-                                    )}
-                                    <Text style={{ fontSize: 12, color: Colors.slate400 }}>[부가세 별도]</Text>
-                                </View>
-
-                                {/* 3. Description Section */}
-                                <View style={{ padding: 16, backgroundColor: Colors.slate50, borderRadius: 12 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.slate800, marginBottom: 12 }}>매물 상세 특징</Text>
-                                    {descriptionPoints.length > 0 ? (
-                                        descriptionPoints.map((point, index) => (
-                                            <View key={index} style={{ flexDirection: 'row', marginBottom: 8 }}>
-                                                <Text style={{ fontSize: 14, color: headerColor, marginRight: 8 }}>✓</Text>
-                                                <Text style={{ fontSize: 14, color: Colors.slate700, flex: 1, lineHeight: 22 }}>{point}</Text>
-                                            </View>
-                                        ))
-                                    ) : (
-                                        <Text style={{ fontSize: 14, color: Colors.slate400, fontStyle: 'italic' }}>상세 설명이 없습니다.</Text>
-                                    )}
-                                </View>
-                            </View>
-
-                            {/* Footer Bar - Broker Info */}
-                            <View style={{
-                                backgroundColor: headerColor,
-                                paddingHorizontal: 16,
-                                paddingVertical: 10,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}>
-                                {brokerInfo ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <View style={{
-                                                backgroundColor: 'white',
-                                                width: 20,
-                                                height: 20,
-                                                borderRadius: 4,
-                                                justifyContent: 'center',
-                                                alignItems: 'center',
-                                                marginRight: 8,
-                                            }}>
-                                                <Text style={{ color: headerColor, fontWeight: 'bold', fontSize: 10 }}>부</Text>
-                                            </View>
-                                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>
-                                                {brokerInfo.businessName}
-                                            </Text>
-                                        </View>
-                                        <Text style={{ color: 'white', fontSize: 11 }}>
-                                            {brokerInfo.address}
-                                        </Text>
-                                        <Text style={{ color: 'white', fontSize: 11 }}>
-                                            대표 {brokerInfo.name}
-                                        </Text>
-                                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>
-                                            {brokerInfo.phone}
-                                        </Text>
-                                    </View>
-                                ) : (
-                                    <Text style={{ color: 'white', fontSize: 11 }}>
-                                        설정 {'>'} 중개사 정보에서 상호/주소/성명/전화번호를 등록해주세요.
-                                    </Text>
-                                )}
-                            </View>
-                        </View>
-                    </ScrollView>
-
-                    <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: Colors.slate200, backgroundColor: 'white' }}>
-                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: Colors.slate800, marginBottom: 12 }}>고객에게 바로 전달하기</Text>
-
-                        {/* Client Selector (Simple Horizontal Scroll or Dropdown) */}
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                {clients.map(client => (
-                                    <TouchableOpacity
-                                        key={client.id}
-                                        style={{
-                                            paddingHorizontal: 16,
-                                            paddingVertical: 10,
-                                            borderRadius: 20,
-                                            backgroundColor: selectedClientForShare?.id === client.id ? Colors.primary : Colors.slate100,
-                                            borderWidth: 1,
-                                            borderColor: selectedClientForShare?.id === client.id ? Colors.primary : Colors.slate200,
-                                        }}
-                                        onPress={() => setSelectedClientForShare(selectedClientForShare?.id === client.id ? null : client)}
-                                    >
-                                        <Text style={{
-                                            fontSize: 14,
-                                            color: selectedClientForShare?.id === client.id ? 'white' : Colors.slate600,
-                                            fontWeight: selectedClientForShare?.id === client.id ? 'bold' : 'normal'
-                                        }}>
-                                            {client.name}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                                {clients.length === 0 && <Text style={{ color: Colors.slate400, padding: 8 }}>등록된 고객이 없습니다.</Text>}
-                            </View>
-                        </ScrollView>
-
-                        {selectedClientForShare ? (
-                            <TouchableOpacity
-                                style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center', backgroundColor: isSharing ? Colors.slate400 : Colors.slate800 }]}
-                                onPress={handleSendSMS}
-                                disabled={isSharing}
-                            >
-                                {isSharing ? <ActivityIndicator size="small" color="white" /> : <Icons.Share size={20} color="white" />}
-                                <Text style={styles.submitButtonText}>
-                                    {isSharing ? '전송 준비 중...' : `${selectedClientForShare.name}님에게 문자 전송`}
-                                </Text>
-                            </TouchableOpacity>
-                        ) : (
-                            isSharing ? (
-                                <View style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center', backgroundColor: Colors.slate400 }]}>
-                                    <ActivityIndicator size="small" color="white" />
-                                    <Text style={styles.submitButtonText}>이미지 생성 중...</Text>
-                                </View>
-                            ) : (
-                                <TouchableOpacity
-                                    style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center' }]}
-                                    onPress={handleShareImage}
-                                >
-                                    <Icons.Share size={20} color="white" />
-                                    <Text style={styles.submitButtonText}>이미지 공유하기 (기본)</Text>
-                                </TouchableOpacity>
-                            )
-                        )}
-                    </View>
-                </SafeAreaView>
-            </Modal >
-        );
-    };
 
     const renderDetail = () => {
         if (!selectedProperty) return null;
@@ -1218,18 +645,11 @@ export default function PropertiesScreen() {
                     }
                 } : undefined}
                 onDelete={!isReadOnly ? () => handleDelete(selectedProperty.id) : undefined}
-                onShare={(prop) => {
-                    if (prop.images && prop.images.length > 0) {
-                        setReportImages(prop.images.slice(0, 3));
-                        setShowImageSelector(true);
-                    } else {
-                        setReportImages([]);
-                        setShowReportPreview(true);
-                    }
-                }}
+                onShare={(prop) => setShowShareModal(true)}
             />
         );
     };
+
 
     return (
         <View style={styles.container}>
@@ -1297,6 +717,7 @@ export default function PropertiesScreen() {
                                         {prop.images[0] ? (
                                             <Image source={{ uri: prop.images[0] }} style={styles.thumbnail} />
                                         ) : (
+
                                             <View style={styles.thumbnailPlaceholder}>
                                                 <Icons.Building size={32} color={Colors.slate300} />
                                             </View>
@@ -2610,7 +2031,16 @@ export default function PropertiesScreen() {
             {/* Building Use Selection Modal */}
 
 
-            {renderReportPreview()}
+
+            {selectedProperty && (
+                <PropertyShareModal
+                    visible={showShareModal}
+                    onClose={() => setShowShareModal(false)}
+                    property={selectedProperty}
+                    clients={clients}
+                    brokerInfo={brokerInfo}
+                />
+            )}
         </View >
     );
 }

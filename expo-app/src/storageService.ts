@@ -1,5 +1,9 @@
 import { decode } from 'base64-arraybuffer';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { supabase } from './lib/supabase';
+import { Platform, NativeModules } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Client, Property, ScheduleTask, BrokerInfo, PropertyType } from './types';
 
 // Sync client data to SharedPreferences for native CallReceiver access
 const syncClientsToNative = (clients: Client[]) => {
@@ -44,7 +48,7 @@ const uploadImage = async (uri: string): Promise<string> => {
         const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
 
         // Read file as base64
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
 
         const { data, error } = await supabase.storage
             .from(BUCKET_NAME)

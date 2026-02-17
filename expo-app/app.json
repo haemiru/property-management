@@ -2,7 +2,7 @@
   "expo": {
     "name": "중개노트",
     "slug": "junggae-note",
-    "version": "1.0.14",
+    "version": "1.0.15",
     "scheme": "junggae-note",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.junominu.junggaenote",
-      "versionCode": 16,
+      "versionCode": 18,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4f46e5"
