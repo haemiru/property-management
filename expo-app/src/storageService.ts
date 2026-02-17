@@ -1,7 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Property, Client, ScheduleTask, BrokerInfo, PropertyType } from './types';
-import { supabase } from './lib/supabase';
-import { NativeModules, Platform } from 'react-native';
+import { decode } from 'base64-arraybuffer';
+import * as FileSystem from 'expo-file-system';
 
 // Sync client data to SharedPreferences for native CallReceiver access
 const syncClientsToNative = (clients: Client[]) => {
@@ -30,6 +28,50 @@ const KEYS = {
     APP_SETTINGS: 'app_settings',
 };
 
+const BUCKET_NAME = 'property-images';
+
+// Helper to upload image if it's a local URI
+const uploadImage = async (uri: string): Promise<string> => {
+    try {
+        if (!uri.startsWith('file://') && !uri.startsWith('content://')) {
+            return uri; // Already a remote URL
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+
+        // Read file as base64
+        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+
+        const { data, error } = await supabase.storage
+            .from(BUCKET_NAME)
+            .upload(fileName, decode(base64), {
+                contentType: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
+                upsert: false
+            });
+
+        if (error) {
+            console.error('Supabase upload error:', error);
+            throw error;
+        }
+
+        // Get Public URL
+        const { data: { publicUrl } } = supabase.storage
+            .from(BUCKET_NAME)
+            .getPublicUrl(fileName);
+
+        return publicUrl;
+    } catch (error) {
+        console.error('Image upload failed:', error);
+        // Fallback: return original URI if upload fails (though it won't persist well)
+        // or throw error to stop saving? Let's throw to warn user.
+        throw error;
+    }
+};
+
 export const storage = {
     // PROPERTIES
     async getProperties(): Promise<Property[]> {
@@ -43,7 +85,6 @@ export const storage = {
             return [];
         }
 
-        // Fix potential type mismatches (e.g. JSONB columns) if necessary
         return (data || []) as any as Property[];
     },
 
@@ -51,9 +92,40 @@ export const storage = {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
 
+        // Upload images first
+        const uploadedImages: string[] = [];
+        if (property.images && property.images.length > 0) {
+            for (const img of property.images) {
+                const publicUrl = await uploadImage(img);
+                uploadedImages.push(publicUrl);
+            }
+        }
+
+        const propertyToSave = { ...property, images: uploadedImages, user_id: user.id };
+
         const { error } = await supabase
             .from('properties')
-            .insert([{ ...property, user_id: user.id }]);
+            .insert([propertyToSave]);
+
+        if (error) throw error;
+    },
+
+    async updateProperty(property: Property): Promise<void> {
+        // Upload images first (for new images added during edit)
+        const uploadedImages: string[] = [];
+        if (property.images && property.images.length > 0) {
+            for (const img of property.images) {
+                const publicUrl = await uploadImage(img);
+                uploadedImages.push(publicUrl);
+            }
+        }
+
+        const propertyToSave = { ...property, images: uploadedImages };
+
+        const { error } = await supabase
+            .from('properties')
+            .update(propertyToSave)
+            .eq('id', property.id);
 
         if (error) throw error;
     },
@@ -66,6 +138,7 @@ export const storage = {
 
         if (error) throw error;
     },
+
 
     // CLIENTS
     async getClients(): Promise<Client[]> {
@@ -281,9 +354,11 @@ export const storage = {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return { propertyTypeOrder: Object.values(PropertyType), defaultAreaUnit: 'py' };
 
+            // 1. Try local cache
             const data = await AsyncStorage.getItem(`${KEYS.APP_SETTINGS}_${user.id}`);
             if (data) {
                 const parsed = JSON.parse(data);
+                // Ensure valid structure
                 const allTypes = Object.values(PropertyType);
                 const savedOrder: string[] = parsed.propertyTypeOrder || [];
                 const finalOrder = [
@@ -295,6 +370,15 @@ export const storage = {
                     defaultAreaUnit: parsed.defaultAreaUnit || 'py',
                 };
             }
+
+            // 2. If no local cache, check user_metadata (Sync from PC/Server)
+            if (user.user_metadata?.app_settings) {
+                const remoteSettings = user.user_metadata.app_settings;
+                // Save to local cache for next time
+                await AsyncStorage.setItem(`${KEYS.APP_SETTINGS}_${user.id}`, JSON.stringify(remoteSettings));
+                return remoteSettings;
+            }
+
         } catch (e) {
             console.error('Failed to get app settings:', e);
         }
@@ -305,6 +389,20 @@ export const storage = {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        await AsyncStorage.setItem(`${KEYS.APP_SETTINGS}_${user.id}`, JSON.stringify(settings));
+        try {
+            // 1. Save locally
+            await AsyncStorage.setItem(`${KEYS.APP_SETTINGS}_${user.id}`, JSON.stringify(settings));
+
+            // 2. Sync to Supabase user_metadata
+            const { error } = await supabase.auth.updateUser({
+                data: { app_settings: settings }
+            });
+
+            if (error) {
+                console.error('Failed to sync settings to cloud:', error);
+            }
+        } catch (e) {
+            console.error('Error saving app settings:', e);
+        }
     }
 };

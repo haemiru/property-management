@@ -215,29 +215,7 @@ export default function SettingsScreen() {
                         <Text style={styles.saveButtonText}>저장하기</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.saveButton, { backgroundColor: Colors.slate500, marginTop: 12 }]}
-                        onPress={async () => {
-                            const { displayIncomingCallNotification } = await import('../../src/services/notificationService');
-                            await displayIncomingCallNotification('테스트 고객', '이것은 테스트 메모입니다.', '2023-10-27 14:00 (3분)');
-                        }}
-                    >
-                        <Text style={styles.saveButtonText}>알림 테스트 (5초 후 발생)</Text>
-                    </TouchableOpacity>
 
-                    {/* --- 소개 페이지 (녹화용) --- */}
-                    <TouchableOpacity
-                        style={[styles.saveButton, { backgroundColor: Colors.purple, marginTop: 12 }]}
-                        onPress={() => {
-                            // @ts-ignore
-                            router.push('/intro');
-                        }}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Icons.Camera size={20} color="white" />
-                            <Text style={styles.saveButtonText}>소개 페이지 보기 (녹화용)</Text>
-                        </View>
-                    </TouchableOpacity>
 
                     {/* --- 로그아웃 --- */}
                     <View style={[styles.sectionCard, { marginTop: 16 }]}>

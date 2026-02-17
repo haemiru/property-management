@@ -2,7 +2,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { useEffect } from 'react';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator, Platform, PermissionsAndroid, Alert } from 'react-native';
 import { Colors } from '../src/constants';
 // Removed unused imports: startCallListener, stopCallListener
 
@@ -22,6 +22,39 @@ function RootLayoutNav() {
             router.replace('/(tabs)');
         }
     }, [session, loading, segments]);
+
+    // Request permissions on mount
+    useEffect(() => {
+        const requestPermissions = async () => {
+            if (Platform.OS !== 'android') return;
+
+            try {
+                const permissionsToRequest = [
+                    PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE,
+                    PermissionsAndroid.PERMISSIONS.READ_CALL_LOG,
+                    PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+                ].filter(Boolean); // Filter out undefined if any
+
+                const granted = await PermissionsAndroid.requestMultiple(permissionsToRequest);
+
+                const allGranted = Object.values(granted).every(
+                    (status) => status === PermissionsAndroid.RESULTS.GRANTED
+                );
+
+                if (!allGranted) {
+                    console.log('Some permissions denied:', granted);
+                    // Optional: Show alert if critical permissions are denied
+                    // Alert.alert('권한 필요', '전화 수신 알림을 위해 전화/통화기록 권한이 필요합니다.');
+                } else {
+                    console.log('All permissions granted');
+                }
+            } catch (err) {
+                console.warn(err);
+            }
+        };
+
+        requestPermissions();
+    }, []);
 
     if (loading) {
         return (

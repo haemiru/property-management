@@ -553,61 +553,68 @@ export default function PropertiesScreen() {
             return;
         }
 
-        const isUpdate = !!newProp.id;
-        const id = newProp.id || Date.now().toString();
+        try {
+            const isUpdate = !!newProp.id;
+            const id = newProp.id || Date.now().toString();
 
-        const property: Property = {
-            id,
-            managementId: newProp.managementId,
-            title: newProp.title!,
-            type: newProp.type as PropertyType,
-            transactionType: newProp.transactionType as TransactionType,
-            price: newProp.price || '협의',
-            priceAmount: Number(newProp.priceAmount) || 0,
-            address: newProp.address || '',
-            description: newProp.description || '',
-            images: newProp.images || [],
-            clientId: newProp.clientId,
-            createdAt: newProp.createdAt || Date.now(),
-            // New Fields
-            landArea: newProp.landArea,
-            roadCondition: newProp.roadCondition,
-            water: newProp.water,
-            sewage: newProp.sewage,
-            buildingArea: newProp.buildingArea,
-            structureHeight: newProp.structureHeight,
-            usageApprovalDate: newProp.usageApprovalDate,
-            landUseZone: newProp.landUseZone,
-            landCategory: newProp.landCategory,
-            buildingUse: newProp.buildingUse,
-            buildingUseDetail: newProp.buildingUseDetail,
-            buildings: newProp.buildings,
-        };
+            const property: Property = {
+                id,
+                managementId: newProp.managementId,
+                title: newProp.title!,
+                type: newProp.type as PropertyType,
+                transactionType: newProp.transactionType as TransactionType,
+                price: newProp.price || '협의',
+                priceAmount: Number(newProp.priceAmount) || 0,
+                deposit: newProp.deposit,
+                monthlyRent: newProp.monthlyRent,
+                address: newProp.address || '',
+                description: newProp.description || '',
+                images: newProp.images || [],
+                clientId: newProp.clientId,
+                createdAt: newProp.createdAt || Date.now(),
+                // New Fields
+                landArea: newProp.landArea,
+                roadCondition: newProp.roadCondition,
+                water: newProp.water,
+                sewage: newProp.sewage,
+                buildingArea: newProp.buildingArea,
+                structureHeight: newProp.structureHeight,
+                usageApprovalDate: newProp.usageApprovalDate,
+                landUseZone: newProp.landUseZone,
+                landCategory: newProp.landCategory,
+                buildingUse: newProp.buildingUse,
+                buildingUseDetail: newProp.buildingUseDetail,
+                buildings: newProp.buildings,
+            };
 
-        if (isUpdate) {
-            newProperties = properties.map(p => p.id === id ? property : p);
-            if (selectedProperty && selectedProperty.id === id) {
-                setSelectedProperty(property);
+            console.log("Submitting property:", property);
+
+            if (isUpdate) {
+                const updatedProps = properties.map(p => p.id === id ? property : p);
+                if (selectedProperty && selectedProperty.id === id) {
+                    setSelectedProperty(property);
+                }
+                await storage.updateProperty(property);
+                setProperties(updatedProps);
+            } else {
+                const newProps = [property, ...properties];
+                await storage.addProperty(property);
+                setProperties(newProps);
             }
-            // Use updateProperty instead of setProperties
-            await storage.updateProperty(property);
-        } else {
-            newProperties = [property, ...properties];
-            // Use addProperty
-            await storage.addProperty(property);
+
+            setNewProp({
+                type: orderedTypes[0] || PropertyType.HOUSE,
+                transactionType: TransactionType.SALE,
+                images: [],
+                priceAmount: 0,
+                buildings: [],
+            });
+            setIsAdding(false);
+            Alert.alert('완료', isUpdate ? '매물이 수정되었습니다.' : '매물이 등록되었습니다.');
+        } catch (error) {
+            console.error("Error submitting property:", error);
+            Alert.alert('오류', '매물 저장 중 오류가 발생했습니다.');
         }
-
-        setProperties(newProperties);
-        // await storage.setProperties(newProperties); // Removed
-
-        setNewProp({
-            type: orderedTypes[0] || PropertyType.HOUSE,
-            transactionType: TransactionType.SALE,
-            images: [],
-            priceAmount: 0,
-            buildings: [],
-        });
-        setIsAdding(false);
     };
 
     const handleDelete = async (id: string) => {
@@ -668,8 +675,15 @@ export default function PropertiesScreen() {
             matchesBuildingUse && matchesMinAreaPyeong && matchesMaxAreaPyeong;
     });
 
+    const [isSharing, setIsSharing] = useState(false);
+
     const handleShareImage = async () => {
+        if (isSharing) return;
+        setIsSharing(true);
         try {
+            // Wait for view to be fully rendered
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             const uri = await captureRef(reportRef, {
                 format: 'png',
                 quality: 0.9,
@@ -678,6 +692,8 @@ export default function PropertiesScreen() {
         } catch (error) {
             console.error('Image capture error:', error);
             Alert.alert('오류', '이미지 생성 중 오류가 발생했습니다.');
+        } finally {
+            setIsSharing(false);
         }
     };
 
@@ -687,7 +703,13 @@ export default function PropertiesScreen() {
             return;
         }
 
+        if (isSharing) return;
+        setIsSharing(true);
+
         try {
+            // Wait for view to be fully rendered
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             const uri = await captureRef(reportRef, {
                 format: 'png',
                 quality: 0.9,
@@ -698,7 +720,7 @@ export default function PropertiesScreen() {
             if (Platform.OS === 'android') {
                 Alert.alert(
                     '매물장 전송',
-                    `${selectedClientForShare.name} 고객에게 전송합니다.\n공유 화면에서 메시지 앱을 선택해주세요.`,
+                    `${selectedClientForShare.name} 고객에게 전송합니다.\n\n이미지가 생성되면 공유 화면에서 '메시지' 또는 '카카오톡'을 선택해주세요.`,
                     [{ text: '공유하기', onPress: () => Sharing.shareAsync(uri) }]
                 );
             } else {
@@ -722,7 +744,9 @@ export default function PropertiesScreen() {
             }
         } catch (error) {
             console.error('Image send error:', error);
-            Alert.alert('오류', '이미지 전송 중 오류가 발생했습니다.');
+            Alert.alert('오류', '이미지 전송 중 오류가 발생했습니다.\n다시 시도해주세요.');
+        } finally {
+            setIsSharing(false);
         }
     };
 
@@ -1141,20 +1165,30 @@ export default function PropertiesScreen() {
 
                         {selectedClientForShare ? (
                             <TouchableOpacity
-                                style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center', backgroundColor: Colors.slate800 }]}
+                                style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center', backgroundColor: isSharing ? Colors.slate400 : Colors.slate800 }]}
                                 onPress={handleSendSMS}
+                                disabled={isSharing}
                             >
-                                <Icons.Share size={20} color="white" />
-                                <Text style={styles.submitButtonText}>{selectedClientForShare.name}님에게 문자 전송</Text>
+                                {isSharing ? <ActivityIndicator size="small" color="white" /> : <Icons.Share size={20} color="white" />}
+                                <Text style={styles.submitButtonText}>
+                                    {isSharing ? '전송 준비 중...' : `${selectedClientForShare.name}님에게 문자 전송`}
+                                </Text>
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity
-                                style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center' }]}
-                                onPress={handleShareImage}
-                            >
-                                <Icons.Share size={20} color="white" />
-                                <Text style={styles.submitButtonText}>이미지 공유하기 (기본)</Text>
-                            </TouchableOpacity>
+                            isSharing ? (
+                                <View style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center', backgroundColor: Colors.slate400 }]}>
+                                    <ActivityIndicator size="small" color="white" />
+                                    <Text style={styles.submitButtonText}>이미지 생성 중...</Text>
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.submitButton, { marginTop: 0, flexDirection: 'row', gap: 8, justifyContent: 'center' }]}
+                                    onPress={handleShareImage}
+                                >
+                                    <Icons.Share size={20} color="white" />
+                                    <Text style={styles.submitButtonText}>이미지 공유하기 (기본)</Text>
+                                </TouchableOpacity>
+                            )
                         )}
                     </View>
                 </SafeAreaView>
@@ -1619,16 +1653,18 @@ export default function PropertiesScreen() {
                                                             defaultUnit={defaultAreaUnit}
                                                         />
 
-                                                        <Text style={styles.label}>건축물 용도</Text>
-                                                        <TouchableOpacity
-                                                            style={styles.pickerWrapper}
-                                                            onPress={() => {
-                                                                setShowRegBuildingUseDropdown(building.id);
-                                                            }}
-                                                        >
-                                                            <Text style={styles.pickerText}>{building.use || '선택하세요'}</Text>
-                                                            <Text style={styles.pickerArrow}>▼</Text>
-                                                        </TouchableOpacity>
+                                                        <View>
+                                                            <Text style={styles.label}>건축물 용도</Text>
+                                                            <TouchableOpacity
+                                                                style={styles.pickerWrapper}
+                                                                onPress={() => {
+                                                                    setShowRegBuildingUseDropdown(building.id);
+                                                                }}
+                                                            >
+                                                                <Text style={styles.pickerText}>{building.use || '선택하세요'}</Text>
+                                                                <Text style={styles.pickerArrow}>▼</Text>
+                                                            </TouchableOpacity>
+                                                        </View>
 
                                                         {/* Added Detailed Use Input */}
                                                         <Text style={styles.label}>세부 용도</Text>
@@ -1808,7 +1844,7 @@ export default function PropertiesScreen() {
                                                         }}>
                                                             {(newProp.water || []).includes(opt) && <Icons.Check size={14} color="white" />}
                                                         </View>
-                                                        <Text style={{ fontSize: 14 }}>{opt}</Text>
+                                                        <Text style={{ fontSize: 14, color: Colors.slate800 }}>{opt}</Text>
                                                     </TouchableOpacity>
                                                 ))}
                                             </View>
@@ -1835,7 +1871,7 @@ export default function PropertiesScreen() {
                                                         }}>
                                                             {(newProp.sewage || []).includes(opt) && <Icons.Check size={14} color="white" />}
                                                         </View>
-                                                        <Text style={{ fontSize: 14 }}>{opt}</Text>
+                                                        <Text style={{ fontSize: 14, color: Colors.slate800 }}>{opt}</Text>
                                                     </TouchableOpacity>
                                                 ))}
                                             </View>
@@ -1945,7 +1981,7 @@ export default function PropertiesScreen() {
                                                     }}>
                                                         {(newProp.sewage || []).includes(opt) && <Icons.Check size={14} color="white" />}
                                                     </View>
-                                                    <Text style={{ fontSize: 14 }}>{opt}</Text>
+                                                    <Text style={{ fontSize: 14, color: Colors.slate800 }}>{opt}</Text>
                                                 </TouchableOpacity>
                                             ))}
                                         </View>
@@ -1988,6 +2024,45 @@ export default function PropertiesScreen() {
                             </ScrollView>
                         </View>
                     </KeyboardAvoidingView>
+
+                    {/* Building Use Selection Overlay */}
+                    {!!showRegBuildingUseDropdown && showRegBuildingUseDropdown !== false && (
+                        <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 9999 }}>
+                            <TouchableOpacity
+                                style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+                                activeOpacity={1}
+                                onPress={() => setShowRegBuildingUseDropdown(false)}
+                            >
+                                <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '50%' }}>
+                                    <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center', color: Colors.slate800 }}>건축물 용도 선택</Text>
+                                    <ScrollView style={{ marginBottom: 20 }}>
+                                        {BUILDING_USES.map(use => (
+                                            <TouchableOpacity
+                                                key={use}
+                                                style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.slate100 }}
+                                                onPress={() => {
+                                                    if (typeof showRegBuildingUseDropdown === 'string') {
+                                                        const buildingId = showRegBuildingUseDropdown;
+                                                        const updated = newProp.buildings!.map(b => b.id === buildingId ? { ...b, use } : b);
+                                                        setNewProp({ ...newProp, buildings: updated });
+                                                        setShowRegBuildingUseDropdown(false);
+                                                    }
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 16, color: Colors.slate800, textAlign: 'center' }}>{use}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                    <TouchableOpacity
+                                        style={{ padding: 16, backgroundColor: Colors.slate100, borderRadius: 12, alignItems: 'center' }}
+                                        onPress={() => setShowRegBuildingUseDropdown(false)}
+                                    >
+                                        <Text style={{ color: Colors.slate600, fontWeight: 'bold' }}>닫기</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </SafeAreaView>
             </Modal>
 
@@ -2533,46 +2608,7 @@ export default function PropertiesScreen() {
 
             {/* Report Preview Modal */}
             {/* Building Use Selection Modal */}
-            <Modal
-                visible={!!showRegBuildingUseDropdown && showRegBuildingUseDropdown !== false}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowRegBuildingUseDropdown(false)}
-            >
-                <TouchableOpacity
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-                    activeOpacity={1}
-                    onPress={() => setShowRegBuildingUseDropdown(false)}
-                >
-                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '50%' }}>
-                        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center', color: Colors.slate800 }}>건축물 용도 선택</Text>
-                        <ScrollView style={{ marginBottom: 20 }}>
-                            {BUILDING_USES.map(use => (
-                                <TouchableOpacity
-                                    key={use}
-                                    style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.slate100 }}
-                                    onPress={() => {
-                                        if (typeof showRegBuildingUseDropdown === 'string') {
-                                            const buildingId = showRegBuildingUseDropdown;
-                                            const updated = newProp.buildings!.map(b => b.id === buildingId ? { ...b, use } : b);
-                                            setNewProp({ ...newProp, buildings: updated });
-                                            setShowRegBuildingUseDropdown(false);
-                                        }
-                                    }}
-                                >
-                                    <Text style={{ fontSize: 16, color: Colors.slate800, textAlign: 'center' }}>{use}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                        <TouchableOpacity
-                            style={{ padding: 16, backgroundColor: Colors.slate100, borderRadius: 12, alignItems: 'center' }}
-                            onPress={() => setShowRegBuildingUseDropdown(false)}
-                        >
-                            <Text style={{ color: Colors.slate600, fontWeight: 'bold' }}>닫기</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
+
 
             {renderReportPreview()}
         </View >

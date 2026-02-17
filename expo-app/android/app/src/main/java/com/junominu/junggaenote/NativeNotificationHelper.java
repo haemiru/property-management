@@ -27,14 +27,22 @@ public class NativeNotificationHelper {
             return false;
         }
 
+        // Normalize incoming number: remove non-digits, replace startsWith 82 with 0
         String cleanNumber = phoneNumber.replaceAll("[^0-9]", "");
-        if (cleanNumber.isEmpty()) return false;
+        if (cleanNumber.startsWith("82")) {
+            cleanNumber = "0" + cleanNumber.substring(2);
+        }
+
+        if (cleanNumber.isEmpty())
+            return false;
 
         String dashedNumber = cleanNumber;
         if (cleanNumber.length() == 11) {
-            dashedNumber = cleanNumber.substring(0, 3) + "-" + cleanNumber.substring(3, 7) + "-" + cleanNumber.substring(7);
+            dashedNumber = cleanNumber.substring(0, 3) + "-" + cleanNumber.substring(3, 7) + "-"
+                    + cleanNumber.substring(7);
         } else if (cleanNumber.length() == 10) {
-            dashedNumber = cleanNumber.substring(0, 3) + "-" + cleanNumber.substring(3, 6) + "-" + cleanNumber.substring(6);
+            dashedNumber = cleanNumber.substring(0, 3) + "-" + cleanNumber.substring(3, 6) + "-"
+                    + cleanNumber.substring(6);
         }
 
         Log.d(TAG, "Looking up: clean=" + cleanNumber + ", dashed=" + dashedNumber);
@@ -57,7 +65,25 @@ public class NativeNotificationHelper {
                 String clientPhone = client.optString("phone", "");
                 String clientClean = clientPhone.replaceAll("[^0-9]", "");
 
+                // Also normalize stored client number just in case
+                if (clientClean.startsWith("82")) {
+                    clientClean = "0" + clientClean.substring(2);
+                }
+
+                // Check for exact match or suffix match (last 8 digits) to be safe
+                boolean isMatch = false;
                 if (clientClean.equals(cleanNumber)) {
+                    isMatch = true;
+                } else if (cleanNumber.length() >= 8 && clientClean.length() >= 8) {
+                    // Fallback: compare last 8 digits (e.g. 1012345678)
+                    String last8In = cleanNumber.substring(cleanNumber.length() - 8);
+                    String last8Client = clientClean.substring(clientClean.length() - 8);
+                    if (last8In.equals(last8Client)) {
+                        isMatch = true;
+                    }
+                }
+
+                if (isMatch) {
                     String name = client.optString("name", "알 수 없음");
                     String notes = client.optString("notes", "");
                     String callHistory = client.optString("call_history", "");
@@ -199,8 +225,7 @@ public class NativeNotificationHelper {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "수신 전화 알림",
-                    NotificationManager.IMPORTANCE_HIGH
-            );
+                    NotificationManager.IMPORTANCE_HIGH);
             channel.setDescription("고객 전화 수신 시 알림을 표시합니다");
             channel.enableVibration(true);
             channel.enableLights(true);
